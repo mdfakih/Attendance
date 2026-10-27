@@ -1,0 +1,52 @@
+{
+  "name": "attendance-web",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/contracts"
+  ],
+  "scripts": {
+    "dev": "next dev",
+    "build": "npm run build -w @attendance/contracts && next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "npm run build -w @attendance/contracts && tsc --noEmit",
+    "test": "vitest run",
+    "sync:contracts": "node scripts/sync-contracts.mjs"
+  },
+  "dependencies": {
+    "@attendance/contracts": "*",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@hookform/resolvers": "^6.0.1",
+    "@mui/icons-material": "^9.5.0",
+    "@mui/material": "^9.5.0",
+    "@mui/material-nextjs": "^9.5.0",
+    "@mui/x-data-grid": "^9.16.0",
+    "@tanstack/react-query": "^5.105.0",
+    "axios": "^1.21.0",
+    "dayjs": "^1.11.13",
+    "leaflet": "^1.9.4",
+    "next": "16.4.3",
+    "qrcode.react": "^4.2.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-hook-form": "^7.91.0",
+    "react-leaflet": "^5.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@types/leaflet": "^1.9.17",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.4.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.3",
+    "jsdom": "^26.1.0",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { apiCall, failure } from '@/lib/server/api';
+import { isSameOrigin } from '@/lib/server/origin';
 import { clearTokens, readTokens, setTokens, type Realm, type TokenPair } from '@/lib/server/session-cookies';
 
 type Ctx = { params: Promise<{ realm: string; action: string }> };
@@ -33,7 +34,7 @@ function isTokenPair(data: unknown): data is TokenPair {
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const { realm, action } = await ctx.params;
   if (!isRealm(realm)) return NextResponse.json(failure('NOT_FOUND', 'Unknown realm', 404).body, { status: 404 });
-  if (req.headers.get('origin') && req.headers.get('origin') !== req.nextUrl.origin) {
+  if (!isSameOrigin(req)) {
     return NextResponse.json(failure('FORBIDDEN', 'Cross-site request blocked.', 403).body, { status: 403 });
   }
   const body: unknown = await req.json().catch(() => ({}));

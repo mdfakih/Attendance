@@ -1,18 +1,13 @@
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { API_URL } from './api';
+import { isSameOrigin } from './origin';
 import { clearTokens, readTokens, setTokens, type Realm, type TokenPair } from './session-cookies';
 
 const REALM_PREFIX: Readonly<Record<Realm, string>> = { tenant: '/v1/tenant', platform: '/v1/platform' };
 const REFRESH_PATH: Readonly<Record<Realm, string>> = { tenant: '/v1/tenant/auth/refresh', platform: '/v1/platform/auth/refresh' };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const PASS_RESPONSE_HEADERS = ['content-type', 'content-disposition', 'cache-control', 'location', 'x-request-id'];
-
-function sameOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get('origin');
-  if (!origin) return true; // same-origin fetches may omit Origin on GET; mutations from browsers always send it
-  return origin === req.nextUrl.origin;
-}
 
 async function refresh(realm: Realm, refreshToken: string): Promise<TokenPair | null> {
   const res = await fetch(`${API_URL}${REFRESH_PATH[realm]}`, {
@@ -43,7 +38,7 @@ async function forward(req: NextRequest, realm: Realm, path: string[], token: st
  * cookies. On 401 it refreshes once, retries, and rotates the cookies.
  */
 export async function proxyRequest(req: NextRequest, realm: Realm, path: string[]): Promise<Response> {
-  if (MUTATING.has(req.method) && !sameOrigin(req)) {
+  if (MUTATING.has(req.method) && !isSameOrigin(req)) {
     return NextResponse.json({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Cross-site request blocked.' } }, { status: 403 });
   }
   const tokens = await readTokens(realm);

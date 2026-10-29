@@ -7,10 +7,12 @@ export function formatInr(value: string | number | null | undefined): string {
   return inr.format(Number(value));
 }
 
+/** "1h 20m", "45m", "2h". */
 export function formatMinutes(minutes: number | null | undefined): string {
   if (!minutes) return '0h';
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
+  if (h === 0) return `${m}m`;
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
@@ -54,6 +56,29 @@ export const STATUS_LABEL: Readonly<Record<string, string>> = {
   NOT_STARTED: 'Not punched',
   MISSING_OUT: 'Missing out',
 };
+
+/** Where a day stands on counting its time outside working hours. */
+export const REG_STATE_LABEL: Readonly<Record<string, string>> = {
+  NOT_APPLICABLE: 'not counted',
+  AVAILABLE: 'awaiting request',
+  REQUESTED: 'requested',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+};
+
+export const REG_STATE_COLOR: Readonly<Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'>> = {
+  AVAILABLE: 'warning',
+  REQUESTED: 'info',
+  APPROVED: 'success',
+  REJECTED: 'error',
+};
+
+/** "+45m outside hours · requested"; empty when the day has no outside time. */
+export function formatOutside(outsideMinutes: number, regState: string, approvedMinutes?: number): string {
+  if (outsideMinutes <= 0) return '';
+  const state = regState === 'APPROVED' && approvedMinutes !== undefined ? `approved ${formatMinutes(approvedMinutes)}` : (REG_STATE_LABEL[regState] ?? regState);
+  return `+${formatMinutes(outsideMinutes)} outside hours · ${state}`;
+}
 
 export const STATUS_COLOR: Readonly<Record<string, 'success' | 'warning' | 'error' | 'info' | 'default' | 'secondary'>> = {
   PRESENT: 'success',

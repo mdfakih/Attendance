@@ -17,6 +17,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { FeatureKey } from '@attendance/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useShifts } from '@/components/common/filters';
 import { Loading } from '@/components/common/loading';
 import { PageHeader } from '@/components/common/page-header';
 import { useSnackbar } from '@/components/common/snackbar';
@@ -33,6 +34,7 @@ interface Settings {
   accuracyBufferCapM: number;
   selfieRetentionDays: number;
   missingOutReminder: boolean;
+  defaultShiftId: string | null;
 }
 interface Feature {
   key: FeatureKey;
@@ -57,11 +59,12 @@ export default function SettingsPage() {
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api.get<Settings>('/settings') });
   const features = useQuery({ queryKey: ['features'], queryFn: () => api.get<Feature[]>('/features') });
   const billing = useQuery({ queryKey: ['billing'], queryFn: () => api.get<Billing>('/billing'), enabled: isAdmin });
+  const shifts = useShifts();
   const [form, setForm] = useState<Settings | null>(null);
   useEffect(() => { if (settings.data && !form) setForm(settings.data); }, [settings.data, form]);
   const save = useMutation({
     mutationFn: async (f: Settings) => {
-      await api.patch('/settings', { activationCodeTtlDays: f.activationCodeTtlDays, defaultSiteRadiusM: f.defaultSiteRadiusM, defaultMaxAccuracyM: f.defaultMaxAccuracyM, accuracyBufferCapM: f.accuracyBufferCapM, selfieRetentionDays: f.selfieRetentionDays, missingOutReminder: f.missingOutReminder });
+      await api.patch('/settings', { activationCodeTtlDays: f.activationCodeTtlDays, defaultSiteRadiusM: f.defaultSiteRadiusM, defaultMaxAccuracyM: f.defaultMaxAccuracyM, accuracyBufferCapM: f.accuracyBufferCapM, selfieRetentionDays: f.selfieRetentionDays, missingOutReminder: f.missingOutReminder, defaultShiftId: f.defaultShiftId });
       if (can('PAY', 'edit')) await api.put('/settings/pay', { payableDaysBasis: f.payableDaysBasis, defaultOtMultiplier: Number(f.defaultOtMultiplier) });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['settings'] }); refresh(); notify('Settings saved'); },
@@ -92,6 +95,10 @@ export default function SettingsPage() {
                   <TextField type="number" label="Activation code validity (days)" value={form.activationCodeTtlDays} onChange={(e) => setForm({ ...form, activationCodeTtlDays: n(e.target.value) })} />
                   <TextField type="number" label="Keep selfies for (days)" value={form.selfieRetentionDays} onChange={(e) => setForm({ ...form, selfieRetentionDays: n(e.target.value) })} helperText="30–365; deleted automatically afterwards" />
                 </Stack>
+                <TextField select label="Company working hours" value={shifts.data ? (form.defaultShiftId ?? '') : ''} onChange={(e) => setForm({ ...form, defaultShiftId: e.target.value || null })} disabled={!shifts.data} helperText="Applies to everyone unless their branch or the employee has its own shift. Time punched outside these hours counts only once approved.">
+                  <MenuItem value="">None</MenuItem>
+                  {shifts.data?.map((s) => <MenuItem key={s.id} value={s.id}>{s.name} ({s.startTime}–{s.endTime})</MenuItem>)}
+                </TextField>
                 <TextField select label="Remind employees who forget to punch out" value={form.missingOutReminder ? 'yes' : 'no'} onChange={(e) => setForm({ ...form, missingOutReminder: e.target.value === 'yes' })}><MenuItem value="yes">Yes, 30 minutes after shift end</MenuItem><MenuItem value="no">No</MenuItem></TextField>
                 <Typography variant="h6">Pay</Typography>
                 <Stack direction="row" spacing={1}>

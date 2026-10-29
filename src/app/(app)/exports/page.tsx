@@ -53,8 +53,9 @@ function ExportsPage() {
   const branches = useBranches();
   const jobs = useQuery({ queryKey: ['exports'], queryFn: () => api.get<ExportJob[]>('/exports'), refetchInterval: (q) => (q.state.data?.some((j) => j.status === 'QUEUED' || j.status === 'RUNNING') ? 2000 : false) });
   const request = useMutation({
-    mutationFn: () => api.post('/exports', { type, format, date, month, from, to, branchId: branchId || undefined }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['exports'] }); notify('Export started; it appears below when ready'); },
+    // The server generates the file before it responds, so the job comes back DONE or FAILED.
+    mutationFn: () => api.post<{ id: string; status: string; error: string | null }>('/exports', { type, format, date, month, from, to, branchId: branchId || undefined }),
+    onSuccess: (job) => { queryClient.invalidateQueries({ queryKey: ['exports'] }); if (job.status === 'FAILED') notify(job.error ?? 'Export failed', 'error'); else notify('Export ready; download it below'); },
     onError: notifyError,
   });
   const needs = TYPES.find((t) => t.value === type)?.needs ?? 'none';
@@ -70,7 +71,7 @@ function ExportsPage() {
 
   return (
     <>
-      <PageHeader title="Exports" subtitle="Excel and PDF reports are generated in the background and kept for 7 days." />
+      <PageHeader title="Exports" subtitle="Excel and PDF reports are kept for 7 days." />
       <Card sx={{ mb: 2 }}><CardContent>
         <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <TextField select label="Report" value={type} onChange={(e) => setType(e.target.value)} sx={{ minWidth: 240 }}>

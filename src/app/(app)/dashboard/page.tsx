@@ -34,7 +34,7 @@ interface Summary {
   late: number;
   missingOut: number;
   yetToPunch: number;
-  pending: { devices: number; leave: number; overtime: number };
+  pending: { devices: number; leave: number; regularizations: number };
 }
 
 interface LivePunch {
@@ -104,7 +104,7 @@ export default function DashboardPage() {
           <Grid size={{ xs: 6, sm: 4, md: 2 }}><Stat label="Holiday / week off" value={s.offDay} /></Grid>
           <Grid size={{ xs: 6, sm: 4, md: 2 }}><Stat label="Devices to approve" value={s.pending.devices} color={s.pending.devices ? 'warning.main' : undefined} href="/devices" /></Grid>
           <Grid size={{ xs: 6, sm: 4, md: 2 }}><Stat label="Leave requests" value={s.pending.leave} color={s.pending.leave ? 'warning.main' : undefined} href="/leave" /></Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}><Stat label="Overtime to approve" value={s.pending.overtime} href="/attendance/overtime" /></Grid>
+          <Grid size={{ xs: 6, sm: 4, md: 2 }}><Stat label="Extra time requests" value={s.pending.regularizations} color={s.pending.regularizations ? 'warning.main' : undefined} href="/attendance/extra-time" /></Grid>
           <Grid size={12}>
             <Card>
               <CardContent>

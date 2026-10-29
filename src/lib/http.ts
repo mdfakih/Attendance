@@ -95,6 +95,7 @@ export const consoleApi = {
     return { items: unwrap(body), meta: body.meta ?? {} };
   },
   post: async <T>(url: string, data?: unknown): Promise<T> => unwrap<T>((await platformHttp.post<Envelope<T>>(url, data)).data),
+  put: async <T>(url: string, data?: unknown): Promise<T> => unwrap<T>((await platformHttp.put<Envelope<T>>(url, data)).data),
   patch: async <T>(url: string, data?: unknown): Promise<T> => unwrap<T>((await platformHttp.patch<Envelope<T>>(url, data)).data),
 };
 

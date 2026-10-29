@@ -2,24 +2,29 @@
 
 import { useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
+import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
 import Grid from '@mui/material/Grid';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PolicyFormFields, type PolicyForm } from '@/components/admin/policy-form-fields';
 import { FormDialog } from '@/components/common/form-dialog';
-import { Loading } from '@/components/common/loading';
+import { EmptyState, Loading } from '@/components/common/loading';
 import { PageHeader } from '@/components/common/page-header';
+import { SectionCard } from '@/components/common/section-card';
 import { useSnackbar } from '@/components/common/snackbar';
+import { SoftChip } from '@/components/common/status-chip';
 import { api } from '@/lib/http';
 import { useSession } from '@/lib/session';
 
@@ -38,27 +43,8 @@ interface Shift {
   active: boolean;
 }
 
-interface Policy {
-  id: string;
-  name: string;
-  hoursMode: string;
-  lateGraceMin: number;
-  earlyLeaveGraceMin: number;
-  fullDayMinMinutes: number | null;
-  halfDayMinMinutes: number;
-  missingOutTreatment: string;
-  minPunchGapSec: number;
-  blockMockLocation: boolean;
-  otMinMinutes: number;
-  otRoundingMinutes: number;
-  otDailyCapMinutes: number;
-  otRequiresApproval: boolean;
-  outsideMinMinutes: number;
-  maxPunchesPerDay: number;
-}
-
+type Policy = PolicyForm & { id: string };
 type ShiftForm = Omit<Shift, 'id' | 'code' | 'policyId'> & { id?: string; code: string; policyId: string };
-type PolicyForm = Omit<Policy, 'id'> & { id?: string };
 
 const emptyShift: ShiftForm = { name: '', code: '', startTime: '09:00', endTime: '18:00', dutyMinutes: 480, unpaidBreakMinutes: 60, isFlexible: false, windowBeforeStartMin: 120, windowAfterEndMin: 360, policyId: '', active: true };
 const emptyPolicy: PolicyForm = { name: '', hoursMode: 'FIRST_IN_LAST_OUT', lateGraceMin: 10, earlyLeaveGraceMin: 10, fullDayMinMinutes: null, halfDayMinMinutes: 240, missingOutTreatment: 'ABSENT', minPunchGapSec: 60, blockMockLocation: true, otMinMinutes: 30, otRoundingMinutes: 15, otDailyCapMinutes: 240, otRequiresApproval: true, outsideMinMinutes: 15, maxPunchesPerDay: 6 };
@@ -90,58 +76,60 @@ export default function ShiftsPage() {
 
   return (
     <>
-      <PageHeader title="Shifts & attendance policies" subtitle="A shift sets the working hours; a policy sets how punches turn into present, half day, late and overtime." />
-      <Grid container spacing={2}>
+      <PageHeader title="Shifts & attendance policies" subtitle="A shift sets the working hours; a policy decides how punches turn into present, half day, late and overtime." />
+      <Grid container spacing={2.5}>
         <Grid size={{ xs: 12, lg: 6 }}>
-          <Card><CardContent>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">Shifts</Typography>
-              {can('SHIFTS', 'create') && <Button size="small" startIcon={<AddIcon />} onClick={() => setShiftForm(emptyShift)}>Add</Button>}
-            </Stack>
-            {shifts.isLoading ? <Loading minHeight={80} /> : (
-              <Table size="small">
-                <TableHead><TableRow><TableCell>Shift</TableCell><TableCell>Timing</TableCell><TableCell align="right">Duty</TableCell><TableCell /></TableRow></TableHead>
-                <TableBody>
-                  {shifts.data?.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>{s.name}{!s.active && ' (inactive)'}{s.isFlexible && <Typography component="span" variant="caption" color="text.secondary"> flexible</Typography>}</TableCell>
-                      <TableCell>{s.startTime}–{s.endTime}{s.endTime <= s.startTime && ' (overnight)'}</TableCell>
-                      <TableCell align="right">{(s.dutyMinutes / 60).toFixed(1)} h</TableCell>
-                      <TableCell align="right">{editable && <Button size="small" onClick={() => setShiftForm({ ...s, code: s.code ?? '', policyId: s.policyId ?? '' })}>Edit</Button>}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          <SectionCard title="Shifts" subtitle="Working hours employees are expected to keep." icon={<ScheduleOutlinedIcon />} flush action={can('SHIFTS', 'create') ? <Button size="small" startIcon={<AddIcon />} onClick={() => setShiftForm(emptyShift)}>Add shift</Button> : undefined}>
+            {shifts.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={120} /></Box> : (shifts.data?.length ?? 0) === 0 ? <EmptyState compact icon={<ScheduleOutlinedIcon />} title="No shifts yet" /> : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead><TableRow><TableCell sx={{ pl: 2.5 }}>Shift</TableCell><TableCell>Timing</TableCell><TableCell align="right">Duty</TableCell><TableCell sx={{ pr: 2.5 }} /></TableRow></TableHead>
+                  <TableBody>
+                    {shifts.data?.map((s) => (
+                      <TableRow key={s.id} hover>
+                        <TableCell sx={{ pl: 2.5 }}>
+                          <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{s.name}</Typography>
+                            {s.isFlexible && <SoftChip label="Flexible" tone="info" />}
+                            {!s.active && <SoftChip label="Inactive" />}
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{s.startTime}–{s.endTime}{s.endTime <= s.startTime && <Typography component="span" variant="caption" color="text.secondary"> overnight</Typography>}</TableCell>
+                        <TableCell align="right">{(s.dutyMinutes / 60).toFixed(1)} h</TableCell>
+                        <TableCell align="right" sx={{ pr: 2.5 }}>{editable && <Button size="small" onClick={() => setShiftForm({ ...s, code: s.code ?? '', policyId: s.policyId ?? '' })}>Edit</Button>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
-          </CardContent></Card>
+          </SectionCard>
         </Grid>
         <Grid size={{ xs: 12, lg: 6 }}>
-          <Card><CardContent>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">Attendance policies</Typography>
-              {can('SHIFTS', 'create') && <Button size="small" startIcon={<AddIcon />} onClick={() => setPolicyForm(emptyPolicy)}>Add</Button>}
-            </Stack>
-            {policies.isLoading ? <Loading minHeight={80} /> : (
-              <Table size="small">
-                <TableHead><TableRow><TableCell>Policy</TableCell><TableCell>Hours</TableCell><TableCell>Grace</TableCell><TableCell>Half day</TableCell><TableCell /></TableRow></TableHead>
-                <TableBody>
-                  {policies.data?.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.name}</TableCell>
-                      <TableCell>{p.hoursMode === 'FIRST_IN_LAST_OUT' ? 'First in → last out' : 'Sum of in/out pairs'}</TableCell>
-                      <TableCell>{p.lateGraceMin} min</TableCell>
-                      <TableCell>≥ {(p.halfDayMinMinutes / 60).toFixed(1)} h</TableCell>
-                      <TableCell align="right">{editable && <Button size="small" onClick={() => setPolicyForm(p)}>Edit</Button>}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          <SectionCard title="Attendance policies" subtitle="Grace periods, half-day rules and overtime." icon={<RuleOutlinedIcon />} flush action={can('SHIFTS', 'create') ? <Button size="small" startIcon={<AddIcon />} onClick={() => setPolicyForm(emptyPolicy)}>Add policy</Button> : undefined}>
+            {policies.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={120} /></Box> : (policies.data?.length ?? 0) === 0 ? <EmptyState compact icon={<RuleOutlinedIcon />} title="No policies yet" /> : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead><TableRow><TableCell sx={{ pl: 2.5 }}>Policy</TableCell><TableCell>Hours</TableCell><TableCell>Grace</TableCell><TableCell>Half day</TableCell><TableCell sx={{ pr: 2.5 }} /></TableRow></TableHead>
+                  <TableBody>
+                    {policies.data?.map((p) => (
+                      <TableRow key={p.id} hover>
+                        <TableCell sx={{ pl: 2.5, fontWeight: 600 }}>{p.name}</TableCell>
+                        <TableCell>{p.hoursMode === 'FIRST_IN_LAST_OUT' ? 'First in → last out' : 'Sum of in/out pairs'}</TableCell>
+                        <TableCell>{p.lateGraceMin} min</TableCell>
+                        <TableCell>≥ {(p.halfDayMinMinutes / 60).toFixed(1)} h</TableCell>
+                        <TableCell align="right" sx={{ pr: 2.5 }}>{editable && <Button size="small" onClick={() => setPolicyForm(p)}>Edit</Button>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
-          </CardContent></Card>
+          </SectionCard>
         </Grid>
       </Grid>
 
-      <FormDialog open={!!shiftForm} title={shiftForm?.id ? 'Edit shift' : 'Add shift'} busy={saveShift.isPending} onClose={() => setShiftForm(null)} onSubmit={() => shiftForm && saveShift.mutate(shiftForm)}>
+      <FormDialog open={!!shiftForm} title={shiftForm?.id ? 'Edit shift' : 'Add shift'} subtitle="Set when the shift starts and ends, and how long the duty is." busy={saveShift.isPending} onClose={() => setShiftForm(null)} onSubmit={() => shiftForm && saveShift.mutate(shiftForm)}>
         {shiftForm && (
           <>
             <Stack direction="row" spacing={1}>
@@ -167,43 +155,8 @@ export default function ShiftsPage() {
         )}
       </FormDialog>
 
-      <FormDialog open={!!policyForm} title={policyForm?.id ? 'Edit policy' : 'Add policy'} busy={savePolicy.isPending} onClose={() => setPolicyForm(null)} onSubmit={() => policyForm && savePolicy.mutate(policyForm)}>
-        {policyForm && (
-          <>
-            <TextField label="Name" value={policyForm.name} onChange={(e) => setPolicyForm({ ...policyForm, name: e.target.value })} autoFocus />
-            <TextField select label="How hours are counted" value={policyForm.hoursMode} onChange={(e) => setPolicyForm({ ...policyForm, hoursMode: e.target.value })}>
-              <MenuItem value="FIRST_IN_LAST_OUT">First punch to last punch (minus unpaid break)</MenuItem>
-              <MenuItem value="SUM_OF_PAIRS">Sum of each in/out pair</MenuItem>
-            </TextField>
-            <Stack direction="row" spacing={1}>
-              <Num label="Late grace (min)" value={policyForm.lateGraceMin} onChange={(v) => setPolicyForm({ ...policyForm, lateGraceMin: v ?? 0 })} />
-              <Num label="Early-leave grace (min)" value={policyForm.earlyLeaveGraceMin} onChange={(v) => setPolicyForm({ ...policyForm, earlyLeaveGraceMin: v ?? 0 })} />
-            </Stack>
-            <Stack direction="row" spacing={1}>
-              <Num label="Full day needs (min)" value={policyForm.fullDayMinMinutes} onChange={(v) => setPolicyForm({ ...policyForm, fullDayMinMinutes: v })} help="Blank = shift duty hours" />
-              <Num label="Half day needs (min)" value={policyForm.halfDayMinMinutes} onChange={(v) => setPolicyForm({ ...policyForm, halfDayMinMinutes: v ?? 0 })} />
-            </Stack>
-            <TextField select label="Missing out-punch counts as" value={policyForm.missingOutTreatment} onChange={(e) => setPolicyForm({ ...policyForm, missingOutTreatment: e.target.value })}>
-              <MenuItem value="ABSENT">Absent</MenuItem><MenuItem value="HALF_DAY">Half day</MenuItem><MenuItem value="PRESENT_FLAGGED">Present (flagged)</MenuItem>
-            </TextField>
-            <Stack direction="row" spacing={1}>
-              <Num label="Min gap between punches (sec)" value={policyForm.minPunchGapSec} onChange={(v) => setPolicyForm({ ...policyForm, minPunchGapSec: v ?? 0 })} />
-              <Num label="Max punches per day" value={policyForm.maxPunchesPerDay} onChange={(v) => setPolicyForm({ ...policyForm, maxPunchesPerDay: v ?? 0 })} help="2–20" />
-              <TextField select label="Fake GPS apps" value={policyForm.blockMockLocation ? 'block' : 'flag'} onChange={(e) => setPolicyForm({ ...policyForm, blockMockLocation: e.target.value === 'block' })}><MenuItem value="block">Block punch</MenuItem><MenuItem value="flag">Allow but flag</MenuItem></TextField>
-            </Stack>
-            <Typography variant="overline" color="text.secondary">Time outside working hours</Typography>
-            <Stack direction="row" spacing={1}>
-              <TextField select label="Time outside working hours needs approval" value={policyForm.otRequiresApproval ? 'yes' : 'no'} onChange={(e) => setPolicyForm({ ...policyForm, otRequiresApproval: e.target.value === 'yes' })} helperText="Approved time first completes the day; the rest is overtime"><MenuItem value="yes">Yes, employee asks and a manager approves</MenuItem><MenuItem value="no">No, counted automatically</MenuItem></TextField>
-              <Num label="Ignore outside time shorter than (min)" value={policyForm.outsideMinMinutes} onChange={(v) => setPolicyForm({ ...policyForm, outsideMinMinutes: v ?? 0 })} help="Checked separately before the start and after the end" />
-            </Stack>
-            <Typography variant="overline" color="text.secondary">Overtime (when the Overtime feature is on)</Typography>
-            <Stack direction="row" spacing={1}>
-              <Num label="Minimum (min)" value={policyForm.otMinMinutes} onChange={(v) => setPolicyForm({ ...policyForm, otMinMinutes: v ?? 0 })} />
-              <Num label="Round down to (min)" value={policyForm.otRoundingMinutes} onChange={(v) => setPolicyForm({ ...policyForm, otRoundingMinutes: v ?? 1 })} />
-              <Num label="Daily cap (min)" value={policyForm.otDailyCapMinutes} onChange={(v) => setPolicyForm({ ...policyForm, otDailyCapMinutes: v ?? 0 })} />
-            </Stack>
-          </>
-        )}
+      <FormDialog open={!!policyForm} title={policyForm?.id ? 'Edit policy' : 'Add policy'} subtitle="Changes recalculate recent attendance automatically." busy={savePolicy.isPending} onClose={() => setPolicyForm(null)} onSubmit={() => policyForm && savePolicy.mutate(policyForm)}>
+        {policyForm && <PolicyFormFields value={policyForm} onChange={setPolicyForm} />}
       </FormDialog>
     </>
   );

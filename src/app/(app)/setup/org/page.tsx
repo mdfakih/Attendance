@@ -2,15 +2,17 @@
 
 import { useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
+import ApartmentOutlinedIcon from '@mui/icons-material/ApartmentOutlined';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
 import Grid from '@mui/material/Grid';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
@@ -18,9 +20,11 @@ import Typography from '@mui/material/Typography';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormDialog } from '@/components/common/form-dialog';
 import { useShifts } from '@/components/common/filters';
-import { Loading } from '@/components/common/loading';
+import { EmptyState, Loading } from '@/components/common/loading';
 import { PageHeader } from '@/components/common/page-header';
+import { SectionCard } from '@/components/common/section-card';
 import { useSnackbar } from '@/components/common/snackbar';
+import { SoftChip } from '@/components/common/status-chip';
 import { api } from '@/lib/http';
 import { useSession } from '@/lib/session';
 
@@ -77,52 +81,61 @@ export default function OrgPage() {
 
   return (
     <>
-      <PageHeader title="Branches & departments" subtitle="Branches carry the holiday calendar, weekly-off pattern and default shift for their employees." />
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 7 }}>
-          <Card><CardContent>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">Branches</Typography>
-              {can('SETTINGS', 'create') && <Button size="small" startIcon={<AddIcon />} onClick={() => setBranchForm(emptyBranch)}>Add</Button>}
-            </Stack>
-            {branches.isLoading ? <Loading minHeight={80} /> : (
+      <PageHeader title="Branches & departments" subtitle="Branches carry the holiday calendar, weekly-off pattern and default shift for their employees. Departments are optional groups." />
+      <Grid container spacing={2.5}>
+        <Grid size={{ xs: 12, lg: 7 }}>
+          <SectionCard title="Branches" icon={<ApartmentOutlinedIcon />} flush action={can('SETTINGS', 'create') ? <Button size="small" startIcon={<AddIcon />} onClick={() => setBranchForm(emptyBranch)}>Add branch</Button> : undefined}>
+            {branches.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={120} /></Box> : (branches.data?.length ?? 0) === 0 ? <EmptyState compact icon={<ApartmentOutlinedIcon />} title="No branches yet" description="Add your first branch to start adding employees." /> : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead><TableRow><TableCell sx={{ pl: 2.5 }}>Name</TableCell><TableCell>State</TableCell><TableCell align="right">Employees</TableCell><TableCell>Default shift</TableCell><TableCell sx={{ pr: 2.5 }} /></TableRow></TableHead>
+                  <TableBody>
+                    {branches.data?.map((b) => (
+                      <TableRow key={b.id} hover>
+                        <TableCell sx={{ pl: 2.5 }}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{b.name}</Typography>
+                            {b.code && <Typography variant="caption" color="text.secondary">{b.code}</Typography>}
+                            {!b.active && <SoftChip label="Inactive" />}
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{b.stateCode}</TableCell>
+                        <TableCell align="right">{b._count.employees}</TableCell>
+                        <TableCell>{shifts.data?.find((s) => s.id === b.defaultShiftId)?.name ?? '—'}</TableCell>
+                        <TableCell align="right" sx={{ pr: 2.5 }}>{editable && <Button size="small" onClick={() => setBranchForm({ ...emptyBranch, ...b, code: b.code ?? '', address: b.address ?? '', holidayCalendarId: b.holidayCalendarId ?? '', weeklyOffPatternId: b.weeklyOffPatternId ?? '', defaultShiftId: b.defaultShiftId ?? '' })}>Edit</Button>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </SectionCard>
+        </Grid>
+        <Grid size={{ xs: 12, lg: 5 }}>
+          <SectionCard title="Departments" icon={<GroupsOutlinedIcon />} flush action={can('SETTINGS', 'create') ? <Button size="small" startIcon={<AddIcon />} onClick={() => setDeptForm({ name: '', code: '', active: true })}>Add department</Button> : undefined}>
+            {departments.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={120} /></Box> : (departments.data?.length ?? 0) === 0 ? <EmptyState compact icon={<GroupsOutlinedIcon />} title="No departments" description="Optional. Add departments to filter reports and limit what managers see." /> : (
               <Table size="small">
-                <TableHead><TableRow><TableCell>Name</TableCell><TableCell>State</TableCell><TableCell align="right">Employees</TableCell><TableCell>Default shift</TableCell><TableCell /></TableRow></TableHead>
                 <TableBody>
-                  {branches.data?.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell>{b.name}{b.code && <Typography component="span" variant="caption" color="text.secondary"> {b.code}</Typography>}{!b.active && ' (inactive)'}</TableCell>
-                      <TableCell>{b.stateCode}</TableCell>
-                      <TableCell align="right">{b._count.employees}</TableCell>
-                      <TableCell>{shifts.data?.find((s) => s.id === b.defaultShiftId)?.name ?? '—'}</TableCell>
-                      <TableCell align="right">{editable && <Button size="small" onClick={() => setBranchForm({ ...emptyBranch, ...b, code: b.code ?? '', address: b.address ?? '', holidayCalendarId: b.holidayCalendarId ?? '', weeklyOffPatternId: b.weeklyOffPatternId ?? '', defaultShiftId: b.defaultShiftId ?? '' })}>Edit</Button>}</TableCell>
+                  {departments.data?.map((d) => (
+                    <TableRow key={d.id} hover>
+                      <TableCell sx={{ pl: 2.5 }}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{d.name}</Typography>
+                          {d.code && <Typography variant="caption" color="text.secondary">{d.code}</Typography>}
+                          {!d.active && <SoftChip label="Inactive" />}
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right" sx={{ pr: 2.5 }}>{editable && <Button size="small" onClick={() => setDeptForm({ id: d.id, name: d.name, code: d.code ?? '', active: d.active })}>Edit</Button>}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             )}
-          </CardContent></Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
-          <Card><CardContent>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">Departments</Typography>
-              {can('SETTINGS', 'create') && <Button size="small" startIcon={<AddIcon />} onClick={() => setDeptForm({ name: '', code: '', active: true })}>Add</Button>}
-            </Stack>
-            {departments.isLoading ? <Loading minHeight={80} /> : (departments.data?.length ?? 0) === 0 ? <Typography color="text.secondary" variant="body2">Optional. Add departments to filter and scope managers.</Typography> : (
-              <Table size="small">
-                <TableBody>
-                  {departments.data?.map((d) => (
-                    <TableRow key={d.id}><TableCell>{d.name}{!d.active && ' (inactive)'}</TableCell><TableCell align="right">{editable && <Button size="small" onClick={() => setDeptForm({ id: d.id, name: d.name, code: d.code ?? '', active: d.active })}>Edit</Button>}</TableCell></TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent></Card>
+          </SectionCard>
         </Grid>
       </Grid>
 
-      <FormDialog open={!!branchForm} title={branchForm?.id ? 'Edit branch' : 'Add branch'} busy={saveBranch.isPending} onClose={() => setBranchForm(null)} onSubmit={() => branchForm && saveBranch.mutate(branchForm)}>
+      <FormDialog open={!!branchForm} title={branchForm?.id ? 'Edit branch' : 'Add branch'} subtitle="Employees in this branch follow its calendar, weekly offs and shift unless set individually." busy={saveBranch.isPending} onClose={() => setBranchForm(null)} onSubmit={() => branchForm && saveBranch.mutate(branchForm)}>
         {branchForm && (
           <>
             <TextField label="Name" value={branchForm.name} onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })} autoFocus />

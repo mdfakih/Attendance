@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PREFIXES = ['/login', '/select-company', '/accept-invite', '/forgot-password', '/reset-password', '/api/', '/_next/', '/favicon.ico'];
+const PUBLIC_PREFIXES = ['/login', '/select-company', '/accept-invite', '/forgot-password', '/reset-password', '/api/', '/_next/', '/favicon.ico', '/icon.svg'];
 const CONSOLE_PUBLIC = ['/console/login'];
 
 function hasSession(req: NextRequest, realm: 'tenant' | 'platform'): boolean {

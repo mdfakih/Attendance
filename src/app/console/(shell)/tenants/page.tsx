@@ -1,105 +1,163 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import AddIcon from '@mui/icons-material/Add';
-import Alert from '@mui/material/Alert';
+import { Suspense, useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import AddBusinessOutlinedIcon from '@mui/icons-material/AddBusinessOutlined';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import SearchIcon from '@mui/icons-material/Search';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import MenuItem from '@mui/material/MenuItem';
+import InputAdornment from '@mui/material/InputAdornment';
+import LinearProgress from '@mui/material/LinearProgress';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import type { GridColDef } from '@mui/x-data-grid';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { TenantAvatar } from '@/components/brand/tenant-avatar';
 import { DataTable } from '@/components/common/data-table';
-import { FormDialog } from '@/components/common/form-dialog';
+import { ErrorAlert, TableSkeleton } from '@/components/common/loading';
 import { PageHeader } from '@/components/common/page-header';
-import { useSnackbar } from '@/components/common/snackbar';
+import { SoftChip } from '@/components/common/status-chip';
+import { useConsoleSession } from '@/components/console/console-session';
+import { OnboardClientDialog } from '@/components/console/onboard-client-dialog';
+import { TENANT_STATUS, type Overview, type TenantRow } from '@/components/console/types';
 import { formatDate } from '@/lib/format';
 import { consoleApi } from '@/lib/http';
 
-interface TenantRow {
-  id: string;
-  slug: string;
-  displayName: string;
-  legalName: string;
-  status: string;
-  payrollTier: string;
-  employeeCap: number | null;
-  employees: number;
-  plan: string | null;
-  subscriptionStatus: string | null;
-  currentPeriodEnd: string | null;
-  createdAt: string;
+const FILTERS = ['', 'ACTIVE', 'TRIAL', 'PAST_DUE', 'SUSPENDED', 'CANCELLED'] as const;
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return debounced;
 }
 
-const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error' | 'default' | 'info'> = { ACTIVE: 'success', TRIAL: 'info', PAST_DUE: 'warning', SUSPENDED: 'error', CANCELLED: 'default' };
-const STATES = ['AN', 'AP', 'AR', 'AS', 'BR', 'CH', 'CT', 'DL', 'DN', 'GA', 'GJ', 'HP', 'HR', 'JH', 'JK', 'KA', 'KL', 'LA', 'LD', 'MH', 'ML', 'MN', 'MP', 'MZ', 'NL', 'OR', 'PB', 'PY', 'RJ', 'SK', 'TG', 'TN', 'TR', 'UP', 'UT', 'WB'];
+const columns: GridColDef<TenantRow>[] = [
+  {
+    field: 'displayName',
+    headerName: 'Client',
+    flex: 1.6,
+    minWidth: 240,
+    renderCell: (p) => (
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+        <TenantAvatar name={p.row.displayName} logoUrl={p.row.branding?.logoUrl} color={p.row.branding?.primaryColor} size={32} />
+        <Box sx={{ minWidth: 0, lineHeight: 1.25 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{p.row.displayName}</Typography>
+          <Typography variant="caption" color="text.secondary" noWrap component="div">{p.row.legalName}</Typography>
+        </Box>
+      </Stack>
+    ),
+  },
+  { field: 'status', headerName: 'Status', width: 130, renderCell: (p) => <SoftChip dot label={TENANT_STATUS[p.row.status]?.label ?? p.row.status} tone={TENANT_STATUS[p.row.status]?.tone ?? 'default'} /> },
+  { field: 'plan', headerName: 'Plan', width: 140, valueGetter: (_, r) => r.plan ?? '—' },
+  {
+    field: 'employees',
+    headerName: 'Employees',
+    width: 170,
+    renderCell: (p) => {
+      const cap = p.row.employeeCap;
+      const used = cap ? Math.min(100, (p.row.employees / cap) * 100) : 0;
+      return (
+        <Box sx={{ width: '100%' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>{p.row.employees.toLocaleString('en-IN')}{cap ? <Typography component="span" variant="caption" color="text.secondary"> / {cap.toLocaleString('en-IN')}</Typography> : null}</Typography>
+          {cap ? <LinearProgress variant="determinate" value={used} color={used >= 90 ? 'warning' : 'primary'} sx={{ height: 4, mt: 0.5 }} /> : null}
+        </Box>
+      );
+    },
+  },
+  { field: 'currentPeriodEnd', headerName: 'Period ends', width: 130, valueGetter: (_, r) => formatDate(r.currentPeriodEnd) },
+  { field: 'createdAt', headerName: 'Client since', width: 130, valueGetter: (_, r) => formatDate(r.createdAt) },
+  { field: 'go', headerName: '', width: 48, sortable: false, disableColumnMenu: true, renderCell: () => <ChevronRightIcon sx={{ color: 'text.disabled' }} /> },
+];
 
-const emptyForm = { legalName: '', displayName: '', slug: '', gstin: '', stateCode: 'MH', billingEmail: '', planId: '', trialDays: 14, employeeCap: '', payrollTier: 'BASIC', admin: { fullName: '', email: '' } };
-
-export default function TenantsPage() {
-  const { notify, notifyError } = useSnackbar();
-  const queryClient = useQueryClient();
+function TenantsList() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const { canManage } = useConsoleSession();
+  const status = FILTERS.find((f) => f && f === params.get('status')) ?? '';
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
+  const search = useDebounced(q.trim(), 300);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [form, setForm] = useState<typeof emptyForm | null>(null);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const params = { q: q || undefined, status: status || undefined, page, pageSize };
-  const list = useQuery({ queryKey: ['console-tenants', params], queryFn: () => consoleApi.getPaged<TenantRow>('/tenants', params) });
-  const plans = useQuery({ queryKey: ['console-plans'], queryFn: () => consoleApi.get<Array<{ id: string; name: string; active: boolean; trialDays: number }>>('/plans') });
-  const create = useMutation({
-    mutationFn: (f: typeof emptyForm) => consoleApi.post<{ tenantId: string; inviteLink: string }>('/tenants', { ...f, gstin: f.gstin || undefined, employeeCap: f.employeeCap ? Number(f.employeeCap) : undefined }),
-    onSuccess: (d) => { queryClient.invalidateQueries({ queryKey: ['console-tenants'] }); setForm(null); setInviteLink(d.inviteLink); notify('Client onboarded'); },
-    onError: notifyError,
-  });
-  const columns: GridColDef<TenantRow>[] = [
-    { field: 'displayName', headerName: 'Client', flex: 1, minWidth: 200, renderCell: (p) => <Link href={`/console/tenants/${p.row.id}`}>{p.value}</Link> },
-    { field: 'slug', headerName: 'Slug', width: 140 },
-    { field: 'status', headerName: 'Status', width: 120, renderCell: (p) => <Chip size="small" label={p.value} color={STATUS_COLOR[p.value as string]} variant="outlined" /> },
-    { field: 'plan', headerName: 'Plan', width: 120 },
-    { field: 'payrollTier', headerName: 'Pay tier', width: 100 },
-    { field: 'employees', headerName: 'Employees', width: 110, valueGetter: (_, r) => `${r.employees}${r.employeeCap ? ` / ${r.employeeCap}` : ''}` },
-    { field: 'currentPeriodEnd', headerName: 'Period ends', width: 130, valueGetter: (_, r) => formatDate(r.currentPeriodEnd) },
-    { field: 'createdAt', headerName: 'Since', width: 130, valueGetter: (_, r) => formatDate(r.createdAt) },
-  ];
+  const [onboarding, setOnboarding] = useState(params.get('new') === '1');
+  const query = { q: search || undefined, status: status || undefined, page, pageSize };
+  const list = useQuery({ queryKey: ['console-tenants', query], queryFn: () => consoleApi.getPaged<TenantRow>('/tenants', query), placeholderData: (prev) => prev });
+  const overview = useQuery({ queryKey: ['console-overview'], queryFn: () => consoleApi.get<Overview>('/overview') });
+  const counts = overview.data?.tenantsByStatus;
+  const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined;
+
+  const setStatus = (next: string) => {
+    setPage(1);
+    router.replace(next ? `${pathname}?status=${next}` : pathname, { scroll: false });
+  };
+
   return (
     <>
-      <PageHeader title="Clients" subtitle={`${list.data?.meta.total ?? 0} companies`} actions={<Button variant="contained" startIcon={<AddIcon />} onClick={() => setForm({ ...emptyForm, planId: plans.data?.find((p) => p.active)?.id ?? '' })}>Onboard client</Button>} />
-      {inviteLink && <Alert severity="success" onClose={() => setInviteLink(null)} sx={{ mb: 2, wordBreak: 'break-all' }}>Invitation emailed to the admin. Backup link: {inviteLink}</Alert>}
-      <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
-        <TextField label="Search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} sx={{ minWidth: 240 }} />
-        <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 150 }}><MenuItem value="">All</MenuItem>{Object.keys(STATUS_COLOR).map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}</TextField>
+      <PageHeader
+        title="Clients"
+        subtitle="Every company using the platform. Open one to manage its modules, branding and billing."
+        actions={canManage && <Button variant="contained" startIcon={<AddBusinessOutlinedIcon />} onClick={() => setOnboarding(true)}>Onboard client</Button>}
+      />
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2, alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          {FILTERS.map((f) => {
+            const count = f ? counts?.[f] ?? 0 : total;
+            const selected = status === f;
+            return (
+              <Chip
+                key={f || 'all'}
+                label={`${f ? TENANT_STATUS[f].label : 'All'}${count !== undefined ? ` · ${count}` : ''}`}
+                onClick={() => setStatus(f)}
+                color={selected ? 'primary' : 'default'}
+                variant={selected ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 600 }}
+              />
+            );
+          })}
+        </Stack>
+        <TextField
+          placeholder="Search by name or ID"
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setPage(1); }}
+          sx={{ maxWidth: { md: 320 } }}
+          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+          aria-label="Search clients"
+        />
       </Stack>
-      <DataTable rows={list.data?.items ?? []} columns={columns} loading={list.isLoading} total={list.data?.meta.total} page={page} pageSize={pageSize} onPageChange={(p, s) => { setPage(p); setPageSize(s); }} />
-      <FormDialog open={!!form} title="Onboard a client" submitLabel="Create & invite admin" busy={create.isPending} onClose={() => setForm(null)} onSubmit={() => form && create.mutate(form)}>
-        {form && (<>
-          <Stack direction="row" spacing={1}>
-            <TextField label="Company display name" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value, slug: form.slug || e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') })} autoFocus />
-            <TextField label="Slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} helperText="lowercase, 3–40 chars" />
-          </Stack>
-          <TextField label="Legal name" value={form.legalName} onChange={(e) => setForm({ ...form, legalName: e.target.value })} />
-          <Stack direction="row" spacing={1}>
-            <TextField label="GSTIN (optional)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} />
-            <TextField select label="State" value={form.stateCode} onChange={(e) => setForm({ ...form, stateCode: e.target.value })} sx={{ minWidth: 110 }}>{STATES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}</TextField>
-          </Stack>
-          <TextField label="Billing email" type="email" value={form.billingEmail} onChange={(e) => setForm({ ...form, billingEmail: e.target.value })} />
-          <Stack direction="row" spacing={1}>
-            <TextField select label="Plan" value={form.planId} onChange={(e) => setForm({ ...form, planId: e.target.value })}>{plans.data?.filter((p) => p.active).map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}</TextField>
-            <TextField select label="Pay tier" value={form.payrollTier} onChange={(e) => setForm({ ...form, payrollTier: e.target.value })}><MenuItem value="BASIC">Basic pay monitoring</MenuItem><MenuItem value="FULL" disabled>Full payroll (coming later)</MenuItem></TextField>
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            <TextField type="number" label="Trial days" value={form.trialDays} onChange={(e) => setForm({ ...form, trialDays: Number(e.target.value) })} />
-            <TextField type="number" label="Employee cap (optional)" value={form.employeeCap} onChange={(e) => setForm({ ...form, employeeCap: e.target.value })} />
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            <TextField label="First admin name" value={form.admin.fullName} onChange={(e) => setForm({ ...form, admin: { ...form.admin, fullName: e.target.value } })} />
-            <TextField label="First admin email" type="email" value={form.admin.email} onChange={(e) => setForm({ ...form, admin: { ...form.admin, email: e.target.value } })} />
-          </Stack>
-        </>)}
-      </FormDialog>
+      {list.error && <Box sx={{ mb: 2 }}><ErrorAlert error={list.error} onRetry={() => list.refetch()} /></Box>}
+      {list.isLoading ? (
+        <TableSkeleton rows={6} />
+      ) : (
+        <DataTable
+          rows={list.data?.items ?? []}
+          columns={columns}
+          loading={list.isFetching}
+          total={list.data?.meta.total ?? 0}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={(p, s) => { setPage(p); setPageSize(s); }}
+          rowHeight={60}
+          onRowClick={(p) => router.push(`/console/tenants/${p.row.id}`)}
+          emptyText={search || status ? 'No clients match these filters.' : 'No clients yet. Onboard your first one.'}
+          sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' } }}
+          height={640}
+        />
+      )}
+      <OnboardClientDialog open={onboarding} onClose={() => setOnboarding(false)} />
     </>
+  );
+}
+
+export default function TenantsPage() {
+  return (
+    <Suspense fallback={<TableSkeleton rows={6} />}>
+      <TenantsList />
+    </Suspense>
   );
 }

@@ -9,8 +9,11 @@ import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import axios from 'axios';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { AuthCard } from '@/components/auth/auth-card';
+import { PasswordField } from '@/components/auth/password-field';
+import { AppLoader } from '@/components/common/app-loader';
 import { authAction, errorMessage } from '@/lib/http';
 
 interface InviteInfo {
@@ -22,6 +25,7 @@ interface InviteInfo {
 
 function AcceptInviteForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const token = useSearchParams().get('token') ?? '';
   const [info, setInfo] = useState<InviteInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +46,7 @@ function AcceptInviteForm() {
     setError(null);
     try {
       await authAction('tenant', 'accept-invite', values);
+      queryClient.clear();
       router.replace('/dashboard');
     } catch (e: unknown) {
       setError(errorMessage(e));
@@ -54,15 +59,14 @@ function AcceptInviteForm() {
         <Stack spacing={2}>
           {error && <Alert severity="error">{error}</Alert>}
           <TextField label="Your name" {...form.register('fullName')} error={!!form.formState.errors.fullName} helperText={form.formState.errors.fullName?.message} disabled={info?.hasAccount} />
-          <TextField
+          <PasswordField
             label={info?.hasAccount ? 'Your existing password' : 'Create a password'}
-            type="password"
             autoComplete={info?.hasAccount ? 'current-password' : 'new-password'}
             {...form.register('password')}
             error={!!form.formState.errors.password}
             helperText={form.formState.errors.password?.message ?? (info?.hasAccount ? 'This email already has an account; confirm its password.' : 'At least 10 characters with letters and numbers')}
           />
-          <Button type="submit" variant="contained" size="large" disabled={!info || form.formState.isSubmitting}>
+          <Button type="submit" variant="contained" size="large" disabled={!info} loading={form.formState.isSubmitting}>
             Continue
           </Button>
         </Stack>
@@ -73,7 +77,7 @@ function AcceptInviteForm() {
 
 export default function AcceptInvitePage() {
   return (
-    <Suspense>
+    <Suspense fallback={<AppLoader label="Loading" />}>
       <AcceptInviteForm />
     </Suspense>
   );

@@ -1,47 +1,95 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import AppBar from '@mui/material/AppBar';
+import { useRouter } from 'next/navigation';
+import ApartmentOutlinedIcon from '@mui/icons-material/ApartmentOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import SellOutlinedIcon from '@mui/icons-material/SellOutlined';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
-import Toolbar from '@mui/material/Toolbar';
+import Card from '@mui/material/Card';
 import Typography from '@mui/material/Typography';
-import { useQuery } from '@tanstack/react-query';
-import { authAction, consoleApi } from '@/lib/http';
+import { BrandLogo } from '@/components/brand/brand-mark';
+import { AppLoader } from '@/components/common/app-loader';
+import { EmptyState } from '@/components/common/loading';
+import { useSnackbar } from '@/components/common/snackbar';
+import { ThemeModeToggle } from '@/components/common/theme-mode-toggle';
+import { ConsoleSessionProvider, PLATFORM_ROLE_LABEL, useConsoleMeQuery } from '@/components/console/console-session';
+import { AccountMenu } from '@/components/shell/account-menu';
+import { SidebarLayout, type ShellNavSection } from '@/components/shell/sidebar-layout';
+import { authAction, errorMessage } from '@/lib/http';
 
-const TABS = [
-  { href: '/console', label: 'Overview' },
-  { href: '/console/tenants', label: 'Clients' },
-  { href: '/console/plans', label: 'Plans' },
+const SECTIONS: ShellNavSection[] = [
+  {
+    title: 'Platform',
+    items: [
+      { href: '/console', label: 'Overview', icon: <InsightsOutlinedIcon /> },
+      { href: '/console/tenants', label: 'Clients', icon: <ApartmentOutlinedIcon /> },
+      { href: '/console/plans', label: 'Plans & pricing', icon: <SellOutlinedIcon /> },
+    ],
+  },
 ];
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const router = useRouter();
-  const me = useQuery({ queryKey: ['console-me'], queryFn: () => consoleApi.get<{ fullName: string; role: string }>('/auth/me') });
-  const active = TABS.filter((t) => pathname === t.href || (t.href !== '/console' && pathname.startsWith(t.href))).pop()?.href ?? '/console';
+  const me = useConsoleMeQuery();
+  const { notifyError } = useSnackbar();
+  const [leaving, setLeaving] = useState(false);
   const logout = async () => {
-    await authAction('platform', 'logout');
+    setLeaving(true);
+    try {
+      await authAction('platform', 'logout');
+    } catch (error: unknown) {
+      setLeaving(false);
+      notifyError(error);
+      return;
+    }
+    // The cache is cleared on the next sign-in, so no one sees this user's data.
     router.replace('/console/login');
   };
+  if (me.isLoading) return <AppLoader label="Opening the console" />;
+  if (me.error || !me.data) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', p: 2, bgcolor: 'background.default' }}>
+        <Card sx={{ maxWidth: 460, width: '100%' }}>
+          <EmptyState
+            icon={<ReportProblemOutlinedIcon />}
+            title="We couldn’t open the console"
+            description={errorMessage(me.error ?? new Error('Could not load your account.'))}
+            action={
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button variant="contained" onClick={() => me.refetch()}>Try again</Button>
+                <Button component={Link} href="/console/login">Sign in again</Button>
+              </Box>
+            }
+          />
+        </Card>
+      </Box>
+    );
+  }
+  const role = PLATFORM_ROLE_LABEL[me.data.role] ?? me.data.role;
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Toolbar>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, mr: 3 }}>Attendance · Superadmin</Typography>
-          <Tabs value={active} sx={{ flexGrow: 1 }}>
-            {TABS.map((t) => <Tab key={t.href} value={t.href} label={t.label} component={Link} href={t.href} />)}
-          </Tabs>
-          <Typography variant="body2" color="text.secondary" sx={{ mr: 2 }}>{me.data?.fullName} · {me.data?.role}</Typography>
-          <Button onClick={logout}>Sign out</Button>
-        </Toolbar>
-      </AppBar>
-      <Container maxWidth="xl" sx={{ py: 3 }}>{children}</Container>
-    </Box>
+    <ConsoleSessionProvider me={me.data}>
+      {leaving && <AppLoader label="Signing you out" />}
+      <SidebarLayout
+        header={<BrandLogo size={34} caption="Platform console" />}
+        footer={
+          <Typography variant="caption" color="text.secondary" component="div">
+            Signed in as <strong>{role}</strong>
+          </Typography>
+        }
+        sections={SECTIONS}
+        topbarEnd={
+          <>
+            <ThemeModeToggle />
+            <AccountMenu name={me.data.fullName} email={me.data.email} role={role} onSignOut={logout} />
+          </>
+        }
+      >
+        {children}
+      </SidebarLayout>
+    </ConsoleSessionProvider>
   );
 }

@@ -1,20 +1,23 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
-import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { GridColDef } from '@mui/x-data-grid';
 import type { RegularizationDecisionInput } from '@attendance/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PersonCell } from '@/components/admin/person-cell';
+import { REQUEST_FILTERS, REQUEST_STATUS } from '@/components/admin/status';
+import { StatusTabs } from '@/components/admin/status-tabs';
 import { DataTable } from '@/components/common/data-table';
+import { FeatureGate } from '@/components/common/feature-gate';
 import { FormDialog } from '@/components/common/form-dialog';
 import { PageHeader } from '@/components/common/page-header';
 import { useSnackbar } from '@/components/common/snackbar';
+import { SoftChip } from '@/components/common/status-chip';
 import { formatDate, formatMinutes, formatTime } from '@/lib/format';
 import { api } from '@/lib/http';
 import { useSession } from '@/lib/session';
@@ -54,7 +57,6 @@ interface Pending {
   decision: RegularizationDecisionInput['decision'];
 }
 
-const COLOR: Record<string, 'success' | 'warning' | 'error' | 'default'> = { APPROVED: 'success', PENDING: 'warning', REJECTED: 'error', CANCELLED: 'default' };
 const OFF_DAY: Record<string, string> = { WEEKLY_OFF: 'Weekly off', HOLIDAY: 'Holiday' };
 
 /** What can still be approved: the day's current outside time, or what was asked for if the day is gone. */
@@ -75,7 +77,7 @@ function outsideSplit(r: RegRow): string {
   return parts.length ? parts.join(' · ') : formatMinutes(outsideOf(r));
 }
 
-export default function ExtraTimePage() {
+function ExtraTimeRequests() {
   const { can } = useSession();
   const { notify, notifyError } = useSnackbar();
   const queryClient = useQueryClient();
@@ -108,35 +110,55 @@ export default function ExtraTimePage() {
   };
 
   const columns: GridColDef<RegRow>[] = [
-    { field: 'name', headerName: 'Employee', flex: 1, minWidth: 180, valueGetter: (_, r) => r.employee.fullName, renderCell: (p) => <Link href={`/employees/${p.row.employee.id}`}>{p.row.employee.fullName}</Link> },
+    { field: 'name', headerName: 'Employee', flex: 1, minWidth: 200, valueGetter: (_, r) => r.employee.fullName, renderCell: (p) => <PersonCell name={p.row.employee.fullName} href={`/employees/${p.row.employee.id}`} caption={p.row.employee.employeeCode} /> },
     { field: 'date', headerName: 'Date', width: 120, valueGetter: (_, r) => formatDate(r.date) },
-    { field: 'hours', headerName: 'Working hours', width: 120, valueGetter: (_, r) => workingHours(r.day) },
+    { field: 'hours', headerName: 'Working hours', width: 130, valueGetter: (_, r) => workingHours(r.day) },
     { field: 'punches', headerName: 'Punches', width: 120, valueGetter: (_, r) => (r.day ? `${formatTime(r.day.firstPunchAt)}–${formatTime(r.day.lastPunchAt)}` : '—') },
     { field: 'outside', headerName: 'Outside hours', width: 220, valueGetter: (_, r) => outsideSplit(r) },
     { field: 'reason', headerName: 'Reason', flex: 1, minWidth: 200 },
-    { field: 'status', headerName: 'Status', width: 140, renderCell: (p) => <Chip size="small" label={p.row.status === 'APPROVED' ? `APPROVED ${formatMinutes(p.row.approvedMinutes)}` : p.row.status} color={COLOR[p.row.status]} variant="outlined" /> },
-    { field: 'actions', headerName: '', width: 180, sortable: false, renderCell: (p) => (can('ATTENDANCE', 'edit') && p.row.status === 'PENDING' ? (
-      <Stack direction="row" spacing={1}>
-        <Button size="small" variant="contained" disabled={outsideOf(p.row) === 0} onClick={() => openDecision(p.row, 'APPROVED')}>Approve</Button>
-        <Button size="small" color="error" onClick={() => openDecision(p.row, 'REJECTED')}>Reject</Button>
-      </Stack>
-    ) : null) },
+    { field: 'status', headerName: 'Status', width: 160, renderCell: (p) => { const s = REQUEST_STATUS[p.row.status] ?? { label: p.row.status, tone: 'default' as const }; return <SoftChip label={p.row.status === 'APPROVED' ? `Approved ${formatMinutes(p.row.approvedMinutes)}` : s.label} tone={s.tone} dot />; } },
+    {
+      field: 'actions', headerName: '', width: 180, sortable: false,
+      renderCell: (p) => (can('ATTENDANCE', 'edit') && p.row.status === 'PENDING' ? (
+        <Stack direction="row" spacing={1}>
+          <Button size="small" variant="contained" disabled={outsideOf(p.row) === 0} onClick={() => openDecision(p.row, 'APPROVED')}>Approve</Button>
+          <Button size="small" color="error" onClick={() => openDecision(p.row, 'REJECTED')}>Reject</Button>
+        </Stack>
+      ) : null),
+    },
   ];
 
   return (
     <>
       <PageHeader title="Extra time requests" subtitle="Time punched outside working hours counts only once approved. It first completes the day; the rest becomes overtime." />
-      <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
-        <TextField select label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} sx={{ minWidth: 160 }}>
-          <MenuItem value="">All</MenuItem><MenuItem value="PENDING">Pending</MenuItem><MenuItem value="APPROVED">Approved</MenuItem><MenuItem value="REJECTED">Rejected</MenuItem><MenuItem value="CANCELLED">Cancelled</MenuItem>
-        </TextField>
-      </Stack>
-      <DataTable rows={list.data?.items ?? []} columns={columns} loading={list.isLoading} total={list.data?.meta.total} page={page} pageSize={pageSize} onPageChange={(p, s) => { setPage(p); setPageSize(s); }} />
-      <FormDialog open={!!pending} title={pending?.decision === 'APPROVED' ? 'Count extra time' : 'Reject request'} submitLabel={pending?.decision === 'APPROVED' ? 'Approve' : 'Reject'} busy={decide.isPending} onClose={() => setPending(null)} onSubmit={submit} maxWidth="xs">
+      <StatusTabs value={status} options={REQUEST_FILTERS} onChange={(v) => { setStatus(v); setPage(1); }} />
+      <DataTable
+        rows={list.data?.items ?? []}
+        columns={columns}
+        loading={list.isLoading}
+        total={list.data?.meta.total}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={(p, s) => { setPage(p); setPageSize(s); }}
+        emptyText={status === 'PENDING' ? 'No extra time requests waiting. You’re all caught up.' : 'No requests here.'}
+      />
+      <FormDialog
+        open={!!pending}
+        title={pending?.decision === 'APPROVED' ? 'Count extra time' : 'Reject request'}
+        subtitle={pending ? `${pending.row.employee.fullName} · ${formatDate(pending.row.date)}` : undefined}
+        submitLabel={pending?.decision === 'APPROVED' ? 'Approve' : 'Reject'}
+        submitDisabled={!!minutesError}
+        busy={decide.isPending}
+        onClose={() => setPending(null)}
+        onSubmit={submit}
+        maxWidth="xs"
+      >
         {pending && (
           <>
-            <Typography variant="body2">{pending.row.employee.fullName} · {formatDate(pending.row.date)} · outside working hours: {outsideSplit(pending.row)}</Typography>
-            <Typography variant="body2" color="text.secondary">Reason: {pending.row.reason}</Typography>
+            <Box sx={{ p: 1.5, borderRadius: 2.5, bgcolor: 'action.hover' }}>
+              <Typography variant="body2"><strong>Outside working hours:</strong> {outsideSplit(pending.row)}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}><strong>Reason:</strong> {pending.row.reason}</Typography>
+            </Box>
             {pending.decision === 'APPROVED' && (
               <TextField label="Minutes to count" type="number" value={minutes} onChange={(e) => setMinutes(e.target.value)} error={!!minutesError} helperText={minutesError || `${formatMinutes(approved)} of ${formatMinutes(max)}`} slotProps={{ htmlInput: { min: 1, max } }} autoFocus />
             )}
@@ -145,5 +167,13 @@ export default function ExtraTimePage() {
         )}
       </FormDialog>
     </>
+  );
+}
+
+export default function ExtraTimePage() {
+  return (
+    <FeatureGate feature="EXTRA_TIME">
+      <ExtraTimeRequests />
+    </FeatureGate>
   );
 }

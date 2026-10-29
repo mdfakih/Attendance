@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import AddIcon from '@mui/icons-material/Add';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import SwapVertOutlinedIcon from '@mui/icons-material/SwapVertOutlined';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
@@ -16,16 +16,20 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { SALARY_BASES } from '@attendance/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormDialog } from '@/components/common/form-dialog';
-import { Loading } from '@/components/common/loading';
-import { MonthPicker } from '@/components/common/month-picker';
-import { useSnackbar } from '@/components/common/snackbar';
 import type { EmployeeDetail } from '@/app/(app)/employees/[id]/page';
-import { formatDate, formatInr, formatMinutes, thisMonth, todayIso } from '@/lib/format';
+import { flagLabel } from '@/components/admin/status';
+import { ConfirmDialog } from '@/components/common/confirm-dialog';
+import { FormDialog } from '@/components/common/form-dialog';
+import { EmptyState, ErrorAlert, Loading } from '@/components/common/loading';
+import { MonthPicker } from '@/components/common/month-picker';
+import { SectionCard } from '@/components/common/section-card';
+import { useSnackbar } from '@/components/common/snackbar';
+import { SoftChip } from '@/components/common/status-chip';
+import { formatDate, formatInr, formatMinutes, thisMonth } from '@/lib/format';
 import { api } from '@/lib/http';
 import { useSession } from '@/lib/session';
+import { BASIS_LABEL, SalaryHistoryCard } from '../salary-history-card';
 
 interface PaySummary {
   status: string;
@@ -57,101 +61,94 @@ interface Adjustment {
   createdAt: string;
 }
 
-const BASIS_LABEL: Record<string, string> = { MONTHLY: 'per month', WEEKLY: 'per week', HOURLY: 'per hour' };
+function Line({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <TableRow>
+      <TableCell sx={{ pl: 0, color: 'text.secondary' }}>{label}</TableCell>
+      <TableCell align="right" sx={{ pr: 0, fontWeight: 600 }}>{value}</TableCell>
+    </TableRow>
+  );
+}
 
 export function EmployeePayTab({ employee, onChanged }: { employee: EmployeeDetail; onChanged: () => void }) {
   const { can } = useSession();
   const { notify, notifyError } = useSnackbar();
   const queryClient = useQueryClient();
   const [month, setMonth] = useState(thisMonth());
-  const [salaryOpen, setSalaryOpen] = useState(false);
   const [adjOpen, setAdjOpen] = useState(false);
-  const [salary, setSalary] = useState({ basis: 'MONTHLY', amount: '', effectiveFrom: todayIso(), revisionReason: '' });
+  const [removing, setRemoving] = useState<Adjustment | null>(null);
   const [adj, setAdj] = useState({ kind: 'ADDITION', label: '', amount: '', reason: '' });
   const pay = useQuery({ queryKey: ['employee-pay', employee.id, month], queryFn: () => api.get<{ summary: PaySummary | null; adjustments: Adjustment[] }>(`/pay/employees/${employee.id}`, { month }) });
   const refresh = () => { queryClient.invalidateQueries({ queryKey: ['employee-pay', employee.id] }); onChanged(); };
-  const addSalary = useMutation({ mutationFn: () => api.post(`/employees/${employee.id}/salary`, salary), onSuccess: () => { refresh(); setSalaryOpen(false); notify('Salary revision saved'); }, onError: notifyError });
   const addAdj = useMutation({ mutationFn: () => api.post('/pay/adjustments', { employeeId: employee.id, month, ...adj }), onSuccess: () => { refresh(); setAdjOpen(false); notify('Adjustment added'); }, onError: notifyError });
-  const voidAdj = useMutation({ mutationFn: ({ id, reason }: { id: string; reason: string }) => api.post(`/pay/adjustments/${id}/void`, { reason }), onSuccess: () => { refresh(); notify('Adjustment removed'); }, onError: notifyError });
+  const voidAdj = useMutation({ mutationFn: ({ id, reason }: { id: string; reason: string }) => api.post(`/pay/adjustments/${id}/void`, { reason }), onSuccess: () => { refresh(); setRemoving(null); notify('Adjustment removed'); }, onError: notifyError });
   const s = pay.data?.summary;
   const locked = s?.status === 'LOCKED';
+  const adjustments = pay.data?.adjustments ?? [];
 
   return (
-    <Grid container spacing={2}>
+    <Grid container spacing={2.5}>
       <Grid size={{ xs: 12, md: 7 }}>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <MonthPicker value={month} onChange={setMonth} />
-            {locked ? <Chip label="Locked" size="small" /> : <Chip label="Open" size="small" color="success" variant="outlined" />}
-          </Stack>
-          {pay.isLoading ? <Loading /> : !s ? <Typography color="text.secondary">No pay data for this month yet.</Typography> : (
-            <Stack spacing={1}>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>{s.flags.map((f) => <Chip key={f} size="small" label={f.replace(/_/g, ' ').toLowerCase()} color="warning" variant="outlined" />)}</Stack>
-              <Typography variant="h4" sx={{ fontWeight: 700 }}>{formatInr(s.netEarned)} <Typography component="span" color="text.secondary">{s.mtdThrough ? `earned till ${formatDate(s.mtdThrough)}` : 'earned this month'}</Typography></Typography>
-              {s.projectedNet && <Typography color="text.secondary">Projected for full month: {formatInr(s.projectedNet)}</Typography>}
+        <Stack spacing={2.5}>
+          <SectionCard
+            title="Earned pay"
+            icon={<AccountBalanceWalletOutlinedIcon />}
+            action={<SoftChip label={locked ? 'Month locked' : 'Month open'} tone={locked ? 'default' : 'success'} dot />}
+          >
+            <Box sx={{ mb: 2 }}><MonthPicker value={month} onChange={setMonth} /></Box>
+            {pay.isLoading ? <Loading /> : pay.error ? <ErrorAlert error={pay.error} onRetry={() => pay.refetch()} /> : !s ? (
+              <EmptyState compact icon={<AccountBalanceWalletOutlinedIcon />} title="No pay data for this month yet" description="Pay is worked out from attendance once a salary is set." />
+            ) : (
+              <Stack spacing={1.5}>
+                <Box>
+                  <Typography sx={{ fontFamily: 'var(--font-display), inherit', fontWeight: 800, fontSize: '2rem', lineHeight: 1.2 }}>{formatInr(s.netEarned)}</Typography>
+                  <Typography variant="body2" color="text.secondary">{s.mtdThrough ? `Earned till ${formatDate(s.mtdThrough)}` : 'Earned this month'}{s.projectedNet ? ` · about ${formatInr(s.projectedNet)} for the full month` : ''}</Typography>
+                </Box>
+                {s.flags.length > 0 && <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>{s.flags.map((f) => <SoftChip key={f} label={flagLabel(f)} tone="warning" />)}</Stack>}
+                <Table size="small">
+                  <TableBody>
+                    <Line label="Salary" value={s.rate ? `${formatInr(s.rate)} ${BASIS_LABEL[s.basis ?? ''] ?? ''}` : '—'} />
+                    <Line label="Payable days" value={<>{s.payableDays ?? '—'} <Typography component="span" variant="caption" color="text.secondary">(LOP {s.lopDays ?? 0})</Typography></>} />
+                    <Line label="Hours worked" value={`${formatMinutes(s.workedMinutes)}${s.otMinutes ? ` + ${formatMinutes(s.otMinutes)} OT` : ''}`} />
+                    <Line label="Base pay" value={formatInr(s.baseEarned)} />
+                    {Number(s.otEarned) > 0 && <Line label="Overtime pay" value={formatInr(s.otEarned)} />}
+                    <Line label="Additions" value={formatInr(s.additions)} />
+                    <Line label="Deductions" value={`− ${formatInr(s.deductions)}`} />
+                  </TableBody>
+                </Table>
+                <Typography variant="caption" color="text.secondary">Earned before statutory deductions (PF, ESI, tax).</Typography>
+              </Stack>
+            )}
+          </SectionCard>
+          <SectionCard
+            title="Additions & deductions"
+            icon={<SwapVertOutlinedIcon />}
+            flush
+            action={can('PAY', 'create') && !locked ? <Button size="small" startIcon={<AddIcon />} onClick={() => setAdjOpen(true)}>Add</Button> : undefined}
+          >
+            {adjustments.length === 0 ? <EmptyState compact title="Nothing added this month" description="Add a bonus, incentive, advance recovery or fine." /> : (
               <Table size="small">
+                <TableHead><TableRow><TableCell sx={{ pl: 2.5 }}>Item</TableCell><TableCell>Reason</TableCell><TableCell align="right">Amount</TableCell><TableCell sx={{ pr: 2.5 }} /></TableRow></TableHead>
                 <TableBody>
-                  <TableRow><TableCell>Salary</TableCell><TableCell align="right">{s.rate ? `${formatInr(s.rate)} ${BASIS_LABEL[s.basis ?? ''] ?? ''}` : '—'}</TableCell></TableRow>
-                  <TableRow><TableCell>Payable days</TableCell><TableCell align="right">{s.payableDays ?? '—'} <Typography component="span" variant="caption" color="text.secondary">(LOP {s.lopDays ?? 0})</Typography></TableCell></TableRow>
-                  <TableRow><TableCell>Hours worked</TableCell><TableCell align="right">{formatMinutes(s.workedMinutes)}{s.otMinutes ? ` + ${formatMinutes(s.otMinutes)} OT` : ''}</TableCell></TableRow>
-                  <TableRow><TableCell>Base pay</TableCell><TableCell align="right">{formatInr(s.baseEarned)}</TableCell></TableRow>
-                  {Number(s.otEarned) > 0 && <TableRow><TableCell>Overtime pay</TableCell><TableCell align="right">{formatInr(s.otEarned)}</TableCell></TableRow>}
-                  <TableRow><TableCell>Additions</TableCell><TableCell align="right">{formatInr(s.additions)}</TableCell></TableRow>
-                  <TableRow><TableCell>Deductions</TableCell><TableCell align="right">− {formatInr(s.deductions)}</TableCell></TableRow>
+                  {adjustments.map((a) => (
+                    <TableRow key={a.id} sx={{ opacity: a.voided ? 0.5 : 1 }}>
+                      <TableCell sx={{ pl: 2.5, fontWeight: 600 }}>{a.label}{a.voided ? ' (removed)' : ''}</TableCell>
+                      <TableCell>{a.reason}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: a.direction === 'DEDUCTION' ? 'error.main' : 'success.main' }}>{a.direction === 'DEDUCTION' ? '−' : '+'} {formatInr(a.amount)}</TableCell>
+                      <TableCell align="right" sx={{ pr: 2.5 }}>{!a.voided && !locked && can('PAY', 'delete') && <Button size="small" color="warning" onClick={() => setRemoving(a)}>Remove</Button>}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
-              <Typography variant="caption" color="text.secondary">Earned before statutory deductions (PF, ESI, tax). Basic pay-monitoring tier.</Typography>
-            </Stack>
-          )}
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 2, mb: 1 }}>
-            <Typography variant="h6">Additions & deductions</Typography>
-            {can('PAY', 'create') && !locked && <Button size="small" startIcon={<AddIcon />} onClick={() => setAdjOpen(true)}>Add</Button>}
-          </Stack>
-          {(pay.data?.adjustments.length ?? 0) === 0 ? <Typography color="text.secondary" variant="body2">None this month.</Typography> : (
-            <Table size="small">
-              <TableHead><TableRow><TableCell>Item</TableCell><TableCell>Reason</TableCell><TableCell align="right">Amount</TableCell><TableCell /></TableRow></TableHead>
-              <TableBody>
-                {pay.data?.adjustments.map((a) => (
-                  <TableRow key={a.id} sx={{ opacity: a.voided ? 0.5 : 1 }}>
-                    <TableCell>{a.label}{a.voided ? ' (removed)' : ''}</TableCell>
-                    <TableCell>{a.reason}</TableCell>
-                    <TableCell align="right" sx={{ color: a.direction === 'DEDUCTION' ? 'error.main' : 'success.main' }}>{a.direction === 'DEDUCTION' ? '−' : '+'} {formatInr(a.amount)}</TableCell>
-                    <TableCell align="right">{!a.voided && !locked && can('PAY', 'delete') && <Button size="small" color="warning" onClick={() => { const r = window.prompt('Reason for removing'); if (r && r.trim().length >= 5) voidAdj.mutate({ id: a.id, reason: r.trim() }); }}>Remove</Button>}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent></Card>
+            )}
+          </SectionCard>
+        </Stack>
       </Grid>
       <Grid size={{ xs: 12, md: 5 }}>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="h6">Salary history</Typography>
-            {can('EMPLOYEE_SALARY', 'edit') && <Button size="small" startIcon={<AddIcon />} onClick={() => setSalaryOpen(true)}>Revise</Button>}
-          </Stack>
-          {!employee.salaryHistory ? <Typography color="text.secondary" variant="body2">You do not have permission to view salary.</Typography> : employee.salaryHistory.length === 0 ? <Typography color="text.secondary" variant="body2">No salary set. Pay cannot be calculated until one is added.</Typography> : (
-            <Table size="small">
-              <TableHead><TableRow><TableCell>From</TableCell><TableCell>To</TableCell><TableCell align="right">Amount</TableCell></TableRow></TableHead>
-              <TableBody>
-                {employee.salaryHistory.map((h) => (
-                  <TableRow key={h.id}><TableCell>{formatDate(h.effectiveFrom)}</TableCell><TableCell>{h.effectiveTo ? formatDate(h.effectiveTo) : 'current'}</TableCell><TableCell align="right">{formatInr(h.amount)} {BASIS_LABEL[h.basis]}</TableCell></TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent></Card>
+        <SalaryHistoryCard employee={employee} onChanged={refresh} />
       </Grid>
 
-      <FormDialog open={salaryOpen} title="Salary revision" busy={addSalary.isPending} onClose={() => setSalaryOpen(false)} onSubmit={() => addSalary.mutate()} maxWidth="xs">
-        <TextField select label="Basis" value={salary.basis} onChange={(e) => setSalary({ ...salary, basis: e.target.value })}>
-          {SALARY_BASES.map((b) => <MenuItem key={b} value={b}>{BASIS_LABEL[b]}</MenuItem>)}
-        </TextField>
-        <TextField label="Amount (₹)" value={salary.amount} onChange={(e) => setSalary({ ...salary, amount: e.target.value })} />
-        <TextField type="date" label="Effective from" value={salary.effectiveFrom} onChange={(e) => setSalary({ ...salary, effectiveFrom: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} helperText="Must be in an open (unlocked) month" />
-        <TextField label="Reason" value={salary.revisionReason} onChange={(e) => setSalary({ ...salary, revisionReason: e.target.value })} />
-      </FormDialog>
-      <FormDialog open={adjOpen} title="Add addition or deduction" busy={addAdj.isPending} onClose={() => setAdjOpen(false)} onSubmit={() => addAdj.mutate()} maxWidth="xs">
+      <FormDialog open={adjOpen} title="Add addition or deduction" subtitle={`Applies to ${employee.fullName}’s pay for the selected month.`} busy={addAdj.isPending} onClose={() => setAdjOpen(false)} onSubmit={() => addAdj.mutate()} maxWidth="xs">
         <TextField select label="Type" value={adj.kind} onChange={(e) => setAdj({ ...adj, kind: e.target.value })}>
           <MenuItem value="ADDITION">Addition (bonus, incentive, arrear)</MenuItem>
           <MenuItem value="DEDUCTION">Deduction (advance recovery, fine)</MenuItem>
@@ -160,6 +157,17 @@ export function EmployeePayTab({ employee, onChanged }: { employee: EmployeeDeta
         <TextField label="Amount (₹)" value={adj.amount} onChange={(e) => setAdj({ ...adj, amount: e.target.value })} />
         <TextField label="Reason" value={adj.reason} onChange={(e) => setAdj({ ...adj, reason: e.target.value })} multiline minRows={2} helperText="Required · recorded in the audit log" />
       </FormDialog>
+      <ConfirmDialog
+        open={!!removing}
+        title="Remove this item?"
+        message={removing ? `${removing.label} (${formatInr(removing.amount)}) will no longer count towards pay.` : ''}
+        confirmLabel="Remove"
+        destructive
+        reasonLabel="Reason for removing"
+        busy={voidAdj.isPending}
+        onClose={() => setRemoving(null)}
+        onConfirm={(reason) => removing && voidAdj.mutate({ id: removing.id, reason })}
+      />
     </Grid>
   );
 }

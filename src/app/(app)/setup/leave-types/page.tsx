@@ -11,9 +11,11 @@ import TextField from '@mui/material/TextField';
 import type { GridColDef } from '@mui/x-data-grid';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable } from '@/components/common/data-table';
+import { FeatureGate } from '@/components/common/feature-gate';
 import { FormDialog } from '@/components/common/form-dialog';
 import { PageHeader } from '@/components/common/page-header';
 import { useSnackbar } from '@/components/common/snackbar';
+import { SoftChip } from '@/components/common/status-chip';
 import { api } from '@/lib/http';
 import { useSession } from '@/lib/session';
 
@@ -37,7 +39,7 @@ type Form = Omit<LeaveType, 'id'> & { id?: string };
 const empty: Form = { code: '', name: '', isPaid: true, allowHalfDay: true, accrualMode: 'YEARLY_ACCRUAL', annualQuota: 12, monthlyAccrual: null, carryForwardCap: 0, maxNegativeBalance: 0, backdateLimitDays: 7, countNonWorkingDays: false, active: true };
 const ACCRUAL: Record<string, string> = { NONE: 'No quota (unlimited / unpaid)', FIXED_QUOTA: 'Fixed yearly quota, no carry-forward', YEARLY_ACCRUAL: 'Yearly quota (prorated for joiners)', MONTHLY_ACCRUAL: 'Accrues every month' };
 
-export default function LeaveTypesPage() {
+function LeaveTypes() {
   const { can } = useSession();
   const { notify, notifyError } = useSnackbar();
   const queryClient = useQueryClient();
@@ -49,20 +51,20 @@ export default function LeaveTypesPage() {
     onError: notifyError,
   });
   const columns: GridColDef<LeaveType>[] = [
-    { field: 'code', headerName: 'Code', width: 80 },
-    { field: 'name', headerName: 'Name', flex: 1, minWidth: 160 },
-    { field: 'isPaid', headerName: 'Paid', width: 80, valueGetter: (_, r) => (r.isPaid ? 'Yes' : 'No') },
+    { field: 'code', headerName: 'Code', width: 90, renderCell: (p) => <SoftChip label={p.row.code} tone="primary" /> },
+    { field: 'name', headerName: 'Name', flex: 1, minWidth: 160, cellClassName: 'strong-cell' },
+    { field: 'isPaid', headerName: 'Pay', width: 100, renderCell: (p) => <SoftChip label={p.row.isPaid ? 'Paid' : 'Unpaid'} tone={p.row.isPaid ? 'success' : 'default'} /> },
     { field: 'accrualMode', headerName: 'Quota', flex: 1, minWidth: 220, valueGetter: (_, r) => `${ACCRUAL[r.accrualMode] ?? r.accrualMode}${r.annualQuota ? ` · ${r.annualQuota}/yr` : ''}${r.monthlyAccrual ? ` · ${r.monthlyAccrual}/mo` : ''}` },
     { field: 'carryForwardCap', headerName: 'Carry forward', width: 120, valueGetter: (_, r) => (r.carryForwardCap === null ? 'Unlimited' : r.carryForwardCap) },
-    { field: 'active', headerName: 'Status', width: 90, valueGetter: (_, r) => (r.active ? 'Active' : 'Inactive') },
+    { field: 'active', headerName: 'Status', width: 110, renderCell: (p) => <SoftChip label={p.row.active ? 'Active' : 'Inactive'} tone={p.row.active ? 'success' : 'default'} dot /> },
     { field: 'actions', headerName: '', width: 90, sortable: false, renderCell: (p) => (can('LEAVE_SETUP', 'edit') ? <Button size="small" onClick={() => setForm(p.row)}>Edit</Button> : null) },
   ];
   const num = (v: string) => (v === '' ? null : Number(v));
   return (
     <>
-      <PageHeader title="Leave types" subtitle="Approved leave feeds the attendance calendar and payable days." actions={can('LEAVE_SETUP', 'create') && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setForm(empty)}>Add type</Button>} />
-      <DataTable rows={types.data ?? []} columns={columns} loading={types.isLoading} height={420} />
-      <FormDialog open={!!form} title={form?.id ? 'Edit leave type' : 'Add leave type'} busy={save.isPending} onClose={() => setForm(null)} onSubmit={() => form && save.mutate(form)}>
+      <PageHeader title="Leave types" subtitle="The kinds of leave employees can ask for, with their yearly quota. Approved leave feeds attendance and payable days." actions={can('LEAVE_SETUP', 'create') && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setForm(empty)}>Add type</Button>} />
+      <DataTable rows={types.data ?? []} columns={columns} loading={types.isLoading} height={460} emptyText="No leave types yet. Add Casual, Sick or Earned leave to start." sx={{ '& .strong-cell': { fontWeight: 600 } }} />
+      <FormDialog open={!!form} title={form?.id ? 'Edit leave type' : 'Add leave type'} subtitle="Set the quota and rules for this kind of leave." busy={save.isPending} onClose={() => setForm(null)} onSubmit={() => form && save.mutate(form)}>
         {form && (<>
           <Stack direction="row" spacing={1}>
             <TextField label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} sx={{ maxWidth: 120 }} />
@@ -85,5 +87,13 @@ export default function LeaveTypesPage() {
         </>)}
       </FormDialog>
     </>
+  );
+}
+
+export default function LeaveTypesPage() {
+  return (
+    <FeatureGate feature="LEAVE">
+      <LeaveTypes />
+    </FeatureGate>
   );
 }

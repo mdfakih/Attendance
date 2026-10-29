@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -14,12 +17,14 @@ import TablePagination from '@mui/material/TablePagination';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import { useQuery } from '@tanstack/react-query';
+import { FilterBar } from '@/components/admin/filter-bar';
 import { NamedSelect, useBranches, useDepartments } from '@/components/common/filters';
-import { Loading } from '@/components/common/loading';
+import { EmptyState, ErrorAlert, TableSkeleton } from '@/components/common/loading';
 import { MonthPicker } from '@/components/common/month-picker';
 import { PageHeader } from '@/components/common/page-header';
-import { formatMinutes, thisMonth } from '@/lib/format';
+import { formatMinutes, monthLabel, thisMonth } from '@/lib/format';
 import { tenantHttp } from '@/lib/http';
+import { tint, type Tone } from '@/lib/tone';
 
 interface RegisterRow {
   employee: { id: string; fullName: string; employeeCode: string | null };
@@ -33,7 +38,34 @@ interface Register {
   meta: { total: number };
 }
 
-const CELL_COLOR: Record<string, string> = { P: '#e8f5e9', HD: '#fff3e0', A: '#ffebee', L: '#f3e5f5', HL: '#fff3e0', H: '#eceff1', WO: '#eceff1', MO: '#ffebee' };
+/** Day codes in the register and how each is coloured. */
+const CODES: ReadonlyArray<{ code: string; label: string; tone: Tone | null }> = [
+  { code: 'P', label: 'Present', tone: 'success' },
+  { code: 'HD', label: 'Half day', tone: 'warning' },
+  { code: 'A', label: 'Absent', tone: 'error' },
+  { code: 'L', label: 'Leave', tone: 'secondary' },
+  { code: 'HL', label: 'Half-day leave', tone: 'warning' },
+  { code: 'H', label: 'Holiday', tone: 'info' },
+  { code: 'WO', label: 'Weekly off', tone: null },
+  { code: 'MO', label: 'Missing out', tone: 'error' },
+];
+const TONE = new Map(CODES.map((c) => [c.code, c.tone]));
+
+function CodeCell({ code }: { code: string | undefined }) {
+  const tone = code ? TONE.get(code) : undefined;
+  return (
+    <TableCell
+      align="center"
+      sx={(t) => ({
+        fontWeight: 700,
+        color: tone ? `${tone}.main` : 'text.secondary',
+        bgcolor: tone ? tint(t, tone, 0.12) : code ? 'action.hover' : 'transparent',
+      })}
+    >
+      {code ?? ''}
+    </TableCell>
+  );
+}
 
 export default function RegisterPage() {
   const [month, setMonth] = useState(thisMonth());
@@ -49,33 +81,61 @@ export default function RegisterPage() {
   const branches = useBranches();
   const departments = useDepartments();
   const data = register.data;
+  const sticky = { position: 'sticky', left: 0, bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider' } as const;
 
   return (
     <>
-      <PageHeader title="Monthly register" actions={<Button component={Link} href={`/exports?type=ATTENDANCE_REGISTER&month=${month}`} variant="outlined">Export</Button>} />
-      <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
+      <PageHeader
+        title="Monthly register"
+        subtitle={`Everyone’s attendance for ${monthLabel(month)}, day by day, with totals.`}
+        actions={<Button component={Link} href={`/exports?type=ATTENDANCE_REGISTER&month=${month}`} variant="outlined" startIcon={<FileDownloadOutlinedIcon />}>Export</Button>}
+      />
+      <FilterBar
+        end={CODES.map((c) => (
+          <Stack key={c.code} direction="row" spacing={0.75} sx={{ alignItems: 'center', mr: 1 }}>
+            <Box sx={(t) => ({ minWidth: 26, px: 0.5, py: 0.25, borderRadius: 1, textAlign: 'center', fontSize: 11, fontWeight: 800, color: c.tone ? `${c.tone}.main` : 'text.secondary', bgcolor: c.tone ? tint(t, c.tone, 0.12) : 'action.hover' })}>{c.code}</Box>
+            <Typography variant="caption" color="text.secondary">{c.label}</Typography>
+          </Stack>
+        ))}
+      >
         <MonthPicker value={month} onChange={(m) => { setMonth(m); setPage(1); }} />
-        <NamedSelect label="Branch" value={branchId} onChange={setBranchId} options={branches.data} />
-        <NamedSelect label="Department" value={departmentId} onChange={setDepartmentId} options={departments.data} />
-        <Typography variant="body2" color="text.secondary">P present · HD half day · A absent · L leave · H holiday · WO weekly off · MO missing out</Typography>
-      </Stack>
-      {register.isLoading || !data ? <Loading /> : (
-        <Paper variant="outlined">
-          <TableContainer sx={{ maxHeight: 'calc(100vh - 300px)' }}>
-            <Table size="small" stickyHeader sx={{ '& td, & th': { px: 0.5, fontSize: 12, whiteSpace: 'nowrap' } }}>
+        <NamedSelect label="Branch" value={branchId} onChange={(v) => { setBranchId(v); setPage(1); }} options={branches.data} allLabel="All branches" />
+        <NamedSelect label="Department" value={departmentId} onChange={(v) => { setDepartmentId(v); setPage(1); }} options={departments.data} allLabel="All departments" />
+      </FilterBar>
+      {register.error ? (
+        <ErrorAlert error={register.error} onRetry={() => register.refetch()} />
+      ) : register.isLoading || !data ? (
+        <TableSkeleton rows={8} />
+      ) : data.items.length === 0 ? (
+        <Paper variant="outlined" sx={{ borderRadius: 3.5 }}>
+          <EmptyState icon={<GridViewOutlinedIcon />} title="No attendance for this month" description="Try another month or clear the branch and department filters." />
+        </Paper>
+      ) : (
+        <Paper variant="outlined" sx={{ borderRadius: 3.5, overflow: 'hidden' }}>
+          <TableContainer sx={{ maxHeight: 'calc(100vh - 360px)', minHeight: 300 }}>
+            <Table size="small" stickyHeader sx={{ '& td, & th': { px: 0.75, fontSize: 12, whiteSpace: 'nowrap' } }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 180 }}>Employee</TableCell>
+                  <TableCell sx={{ ...sticky, zIndex: 3, minWidth: 200 }}>Employee</TableCell>
                   {data.dates.map((d) => <TableCell key={d} align="center">{d.slice(8)}</TableCell>)}
-                  <TableCell align="right">P</TableCell><TableCell align="right">HD</TableCell><TableCell align="right">A</TableCell><TableCell align="right">L</TableCell><TableCell align="right">Late</TableCell><TableCell align="right">LOP</TableCell><TableCell align="right">Hours</TableCell>
+                  {['P', 'HD', 'A', 'L', 'Late', 'LOP', 'Hours'].map((h) => <TableCell key={h} align="right">{h}</TableCell>)}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.items.map((row) => (
                   <TableRow key={row.employee.id} hover>
-                    <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}><Link href={`/employees/${row.employee.id}`}>{row.employee.fullName}</Link>{row.employee.employeeCode && <Typography component="span" variant="caption" color="text.secondary"> {row.employee.employeeCode}</Typography>}</TableCell>
-                    {data.dates.map((d) => <TableCell key={d} align="center" sx={{ bgcolor: CELL_COLOR[row.days[d]] ?? 'transparent' }}>{row.days[d]}</TableCell>)}
-                    <TableCell align="right">{row.totals.present}</TableCell><TableCell align="right">{row.totals.halfDay}</TableCell><TableCell align="right">{row.totals.absent}</TableCell><TableCell align="right">{row.totals.leave}</TableCell><TableCell align="right">{row.totals.late}</TableCell><TableCell align="right">{row.totals.lopDays}</TableCell><TableCell align="right">{formatMinutes(row.totals.workedMinutes)}</TableCell>
+                    <TableCell sx={{ ...sticky, zIndex: 2 }}>
+                      <Typography component={Link} href={`/employees/${row.employee.id}`} variant="body2" color="primary" sx={{ fontWeight: 600, fontSize: 12.5 }}>{row.employee.fullName}</Typography>
+                      {row.employee.employeeCode && <Typography component="span" variant="caption" color="text.secondary"> {row.employee.employeeCode}</Typography>}
+                    </TableCell>
+                    {data.dates.map((d) => <CodeCell key={d} code={row.days[d]} />)}
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>{row.totals.present}</TableCell>
+                    <TableCell align="right">{row.totals.halfDay}</TableCell>
+                    <TableCell align="right">{row.totals.absent}</TableCell>
+                    <TableCell align="right">{row.totals.leave}</TableCell>
+                    <TableCell align="right">{row.totals.late}</TableCell>
+                    <TableCell align="right">{row.totals.lopDays}</TableCell>
+                    <TableCell align="right">{formatMinutes(row.totals.workedMinutes)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

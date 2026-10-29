@@ -36,7 +36,7 @@ interface SelectProps {
 
 export function NamedSelect({ label, value, onChange, options, allLabel = 'All', required, error, sx }: SelectProps) {
   return (
-    <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)} sx={{ minWidth: 180, ...sx }} required={required} error={!!error} helperText={error}>
+    <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)} sx={{ minWidth: 0, ...sx }} required={required} error={!!error} helperText={error}>
       {!required && <MenuItem value="">{allLabel}</MenuItem>}
       {(options ?? []).map((o) => (
         <MenuItem key={o.id} value={o.id}>

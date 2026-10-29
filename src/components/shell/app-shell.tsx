@@ -1,153 +1,170 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import BusinessIcon from '@mui/icons-material/Business';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import DownloadIcon from '@mui/icons-material/Download';
-import EventIcon from '@mui/icons-material/Event';
-import EventBusyIcon from '@mui/icons-material/EventBusy';
-import GridOnIcon from '@mui/icons-material/GridOn';
-import MapIcon from '@mui/icons-material/Map';
-import MenuIcon from '@mui/icons-material/Menu';
-import PaymentsIcon from '@mui/icons-material/Payments';
-import PeopleIcon from '@mui/icons-material/People';
-import PlaceIcon from '@mui/icons-material/Place';
-import ScheduleIcon from '@mui/icons-material/Schedule';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SmartphoneIcon from '@mui/icons-material/Smartphone';
-import TimerIcon from '@mui/icons-material/Timer';
-import TodayIcon from '@mui/icons-material/Today';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import AppBar from '@mui/material/AppBar';
-import Avatar from '@mui/material/Avatar';
+import { useMemo, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
+import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import EventBusyOutlinedIcon from '@mui/icons-material/EventBusyOutlined';
+import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
+import MoreTimeOutlinedIcon from '@mui/icons-material/MoreTimeOutlined';
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import SmartphoneOutlinedIcon from '@mui/icons-material/SmartphoneOutlined';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
-import Drawer from '@mui/material/Drawer';
-import IconButton from '@mui/material/IconButton';
-import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import ListSubheader from '@mui/material/ListSubheader';
-import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
-import Toolbar from '@mui/material/Toolbar';
+import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useQuery } from '@tanstack/react-query';
+import { BrandMark } from '@/components/brand/brand-mark';
+import { TenantAvatar } from '@/components/brand/tenant-avatar';
+import { AppLoader } from '@/components/common/app-loader';
+import { ThemeModeToggle } from '@/components/common/theme-mode-toggle';
+import { useSnackbar } from '@/components/common/snackbar';
+import { PRODUCT } from '@/lib/brand';
 import { api, authAction } from '@/lib/http';
 import { useSession } from '@/lib/session';
+import { AccountMenu } from './account-menu';
 import { NAV } from './nav-items';
-
-const DRAWER_WIDTH = 256;
+import { SidebarLayout, type ShellNavSection } from './sidebar-layout';
 
 const ICONS: Record<string, ReactNode> = {
-  dashboard: <DashboardIcon />,
-  map: <MapIcon />,
-  people: <PeopleIcon />,
-  phone: <SmartphoneIcon />,
-  upload: <UploadFileIcon />,
-  today: <TodayIcon />,
-  grid: <GridOnIcon />,
-  leave: <EventBusyIcon />,
-  timer: <TimerIcon />,
-  money: <PaymentsIcon />,
-  download: <DownloadIcon />,
-  business: <BusinessIcon />,
-  place: <PlaceIcon />,
-  schedule: <ScheduleIcon />,
-  event: <EventIcon />,
-  admin: <AdminPanelSettingsIcon />,
-  settings: <SettingsIcon />,
+  dashboard: <DashboardOutlinedIcon />,
+  map: <MapOutlinedIcon />,
+  people: <PeopleAltOutlinedIcon />,
+  phone: <SmartphoneOutlinedIcon />,
+  upload: <UploadFileOutlinedIcon />,
+  today: <TodayOutlinedIcon />,
+  grid: <GridViewOutlinedIcon />,
+  leave: <EventBusyOutlinedIcon />,
+  leaveSetup: <EventNoteOutlinedIcon />,
+  timer: <MoreTimeOutlinedIcon />,
+  money: <PaymentsOutlinedIcon />,
+  download: <FileDownloadOutlinedIcon />,
+  business: <BusinessOutlinedIcon />,
+  place: <PlaceOutlinedIcon />,
+  schedule: <ScheduleOutlinedIcon />,
+  event: <CalendarMonthOutlinedIcon />,
+  admin: <AdminPanelSettingsOutlinedIcon />,
+  settings: <SettingsOutlinedIcon />,
 };
 
-function NavList({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
-  const { can, has, isAdmin, session } = useSession();
-  return (
-    <Box sx={{ overflowY: 'auto' }}>
-      <Toolbar sx={{ px: 2 }}>
-        <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
-          {session.tenant.displayName}
-        </Typography>
-      </Toolbar>
-      <Divider />
-      {NAV.map((section, i) => {
-        const items = section.items.filter((item) => (item.adminOnly ? isAdmin : !item.module || can(item.module)) && (!item.feature || has(item.feature)));
-        if (items.length === 0) return null;
-        return (
-          <List key={i} dense subheader={section.title ? <ListSubheader disableSticky>{section.title}</ListSubheader> : undefined}>
-            {items.map((item) => (
-              <ListItemButton key={item.href} component={Link} href={item.href} selected={pathname === item.href || (item.href !== '/employees' && pathname.startsWith(`${item.href}/`))} onClick={onNavigate} sx={{ mx: 1, borderRadius: 2 }}>
-                <ListItemIcon sx={{ minWidth: 36 }}>{ICONS[item.icon]}</ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            ))}
-          </List>
-        );
-      })}
-    </Box>
-  );
+interface Company {
+  readonly tenantId: string;
+  readonly name: string;
+  readonly role: string;
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const { session } = useSession();
+  const { can, has, isAdmin, session } = useSession();
+  const { notifyError } = useSnackbar();
   const router = useRouter();
-  const companies = useQuery({ queryKey: ['companies'], queryFn: () => api.get<Array<{ tenantId: string; name: string; role: string }>>('/auth/companies'), enabled: !!menuAnchor });
+  const [menuOpened, setMenuOpened] = useState(false);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const companies = useQuery({ queryKey: ['companies'], queryFn: () => api.get<Company[]>('/auth/companies'), enabled: menuOpened, staleTime: 300_000 });
+  const others = (companies.data ?? []).filter((c) => c.tenantId !== session.tenant.id);
+
+  const sections = useMemo<ShellNavSection[]>(
+    () =>
+      NAV.map((section) => ({
+        title: section.title,
+        items: section.items
+          .filter((item) => (item.adminOnly ? isAdmin : !item.module || can(item.module)) && (!item.feature || has(item.feature)))
+          .map((item) => ({ label: item.label, href: item.href, icon: ICONS[item.icon] })),
+      })).filter((s) => s.items.length > 0),
+    [can, has, isAdmin],
+  );
 
   const logout = async () => {
-    await authAction('tenant', 'logout');
+    setLeaving('Signing you out');
+    try {
+      await authAction('tenant', 'logout');
+    } catch (error: unknown) {
+      setLeaving(null);
+      notifyError(error);
+      return;
+    }
+    // The cache is cleared on the next sign-in, so no one sees this user's data.
     router.replace('/login');
   };
-  const switchCompany = async (tenantId: string) => {
-    await authAction('tenant', 'switch-company', { tenantId });
-    window.location.assign('/dashboard');
+  const switchCompany = async (company: Company) => {
+    setLeaving(`Opening ${company.name}`);
+    try {
+      await authAction('tenant', 'switch-company', { tenantId: company.tenantId });
+      window.location.assign('/dashboard');
+    } catch (error: unknown) {
+      setLeaving(null);
+      notifyError(error);
+    }
   };
 
+  const header = (
+    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <TenantAvatar name={session.tenant.displayName} logoUrl={session.tenant.branding.logoUrl} size={38} />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.25 }} noWrap title={session.tenant.displayName}>
+          {session.tenant.displayName}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap component="div">
+          {session.role.name} workspace
+        </Typography>
+      </Box>
+    </Stack>
+  );
+  const footer = (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+      <BrandMark size={18} />
+      <Typography variant="caption" sx={{ fontWeight: 600 }}>Powered by {PRODUCT.name}</Typography>
+    </Stack>
+  );
+
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      <AppBar position="fixed" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider', zIndex: (t) => t.zIndex.drawer + 1 }}>
-        <Toolbar>
-          <IconButton edge="start" onClick={() => setMobileOpen(true)} sx={{ mr: 1, display: { md: 'none' } }} aria-label="Open menu">
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, flexGrow: 1 }}>
-            Attendance
-          </Typography>
-          <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)} aria-label="Account menu">
-            <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>{session.user.fullName.slice(0, 1)}</Avatar>
-          </IconButton>
-          <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
-            <MenuItem disabled>
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>{session.user.fullName}</Typography>
-                <Typography variant="caption" color="text.secondary">{session.user.email} · {session.role.name}</Typography>
-              </Box>
-            </MenuItem>
-            <Divider />
-            {(companies.data ?? []).filter((c) => c.tenantId !== session.tenant.id).map((c) => (
-              <MenuItem key={c.tenantId} onClick={() => switchCompany(c.tenantId)}>Switch to {c.name}</MenuItem>
-            ))}
-            <MenuItem onClick={logout}>Sign out</MenuItem>
-          </Menu>
-        </Toolbar>
-      </AppBar>
-      <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }}>
-        <Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)} ModalProps={{ keepMounted: true }} sx={{ display: { xs: 'block', md: 'none' }, '& .MuiDrawer-paper': { width: DRAWER_WIDTH } }}>
-          <NavList onNavigate={() => setMobileOpen(false)} />
-        </Drawer>
-        <Drawer variant="permanent" open sx={{ display: { xs: 'none', md: 'block' }, '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' } }}>
-          <NavList />
-        </Drawer>
-      </Box>
-      <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 3 }, width: { md: `calc(100% - ${DRAWER_WIDTH}px)` }, minWidth: 0 }}>
-        <Toolbar />
+    <>
+      {leaving && <AppLoader label={leaving} />}
+      <SidebarLayout
+        header={header}
+        footer={footer}
+        sections={sections}
+        topbarEnd={
+          <>
+            <ThemeModeToggle />
+            <AccountMenu name={session.user.fullName} email={session.user.email} role={session.role.name} onOpen={() => setMenuOpened(true)} onSignOut={logout}>
+              {(close) =>
+                companies.isLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}><CircularProgress size={18} /></Box>
+                ) : others.length > 0 ? (
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" component="div" sx={{ px: 2, pt: 1 }}>Switch company</Typography>
+                    {others.map((c) => (
+                      <MenuItem key={c.tenantId} onClick={() => { close(); void switchCompany(c); }}>
+                        <ListItemIcon><SwapHorizIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText primary={c.name} secondary={c.role} slotProps={{ secondary: { variant: 'caption' } }} />
+                      </MenuItem>
+                    ))}
+                    <Divider />
+                  </Box>
+                ) : null
+              }
+            </AccountMenu>
+          </>
+        }
+      >
         {children}
-      </Box>
-    </Box>
+      </SidebarLayout>
+    </>
   );
 }

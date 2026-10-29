@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
+import CelebrationOutlinedIcon from '@mui/icons-material/CelebrationOutlined';
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import EventRepeatOutlinedIcon from '@mui/icons-material/EventRepeatOutlined';
+import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
 import Checkbox from '@mui/material/Checkbox';
-import Chip from '@mui/material/Chip';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
@@ -18,12 +19,15 @@ import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormDialog } from '@/components/common/form-dialog';
-import { Loading } from '@/components/common/loading';
+import { EmptyState, Loading } from '@/components/common/loading';
 import { PageHeader } from '@/components/common/page-header';
+import { SectionCard } from '@/components/common/section-card';
 import { useSnackbar } from '@/components/common/snackbar';
+import { SoftChip } from '@/components/common/status-chip';
 import { formatDate, todayIso } from '@/lib/format';
 import { api } from '@/lib/http';
 import { useSession } from '@/lib/session';
@@ -56,6 +60,7 @@ interface Override {
 }
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const KIND_LABEL: Record<string, string> = { NATIONAL: 'National', FESTIVAL: 'Festival', COMPANY: 'Company', OPTIONAL: 'Optional' };
 
 export default function CalendarPage() {
   const { can } = useSession();
@@ -97,65 +102,95 @@ export default function CalendarPage() {
 
   return (
     <>
-      <PageHeader title="Holidays & weekly offs" subtitle="Employees cannot punch on these days unless you grant them an override." />
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card><CardContent>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6" sx={{ flexGrow: 1 }}>Holidays {year}</Typography>
-              <TextField select size="small" value={activeCalendar} onChange={(e) => setCalendarId(e.target.value)} sx={{ minWidth: 160 }}>{calendars.data?.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}{c.isDefault ? ' (default)' : ''}</MenuItem>)}</TextField>
-              {can('CALENDAR', 'create') && <Button size="small" onClick={() => setCalendarForm({ name: '', isDefault: false })}>New calendar</Button>}
-              {can('CALENDAR', 'create') && <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => setHolidayForm({ holidayDate: todayIso(), name: '', kind: 'FESTIVAL', isPaid: true })} disabled={!activeCalendar}>Add</Button>}
+      <PageHeader title="Holidays & weekly offs" subtitle="Employees cannot punch on these days unless you allow it for them." />
+      <Grid container spacing={2.5}>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <SectionCard
+            title={`Holidays ${year}`}
+            icon={<CelebrationOutlinedIcon />}
+            flush
+            action={can('CALENDAR', 'create') ? <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => setHolidayForm({ holidayDate: todayIso(), name: '', kind: 'FESTIVAL', isPaid: true })} disabled={!activeCalendar}>Add holiday</Button> : undefined}
+          >
+            <Stack direction="row" spacing={1} sx={{ px: 2.5, py: 1.5, alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+              <TextField select label="Calendar" value={activeCalendar} onChange={(e) => setCalendarId(e.target.value)} disabled={!calendars.data?.length}>
+                {calendars.data?.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}{c.isDefault ? ' (default)' : ''}</MenuItem>)}
+              </TextField>
+              {can('CALENDAR', 'create') && <Button size="small" sx={{ flexShrink: 0 }} onClick={() => setCalendarForm({ name: '', isDefault: false })}>New calendar</Button>}
             </Stack>
-            {holidays.isLoading ? <Loading minHeight={80} /> : (holidays.data?.length ?? 0) === 0 ? <Typography color="text.secondary" variant="body2">No holidays this year.</Typography> : (
-              <Table size="small"><TableBody>
-                {holidays.data?.map((h) => (
-                  <TableRow key={h.id}><TableCell>{formatDate(h.holidayDate)}</TableCell><TableCell>{h.name}</TableCell><TableCell><Chip size="small" label={h.isPaid ? 'paid' : 'unpaid'} variant="outlined" /></TableCell><TableCell align="right">{can('CALENDAR', 'delete') && <IconButton size="small" onClick={() => removeHoliday.mutate(h.id)} aria-label="Remove"><DeleteIcon fontSize="small" /></IconButton>}</TableCell></TableRow>
-                ))}
-              </TableBody></Table>
+            {holidays.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={120} /></Box> : (holidays.data?.length ?? 0) === 0 ? <EmptyState compact icon={<CelebrationOutlinedIcon />} title="No holidays this year" description="Add national, festival and company holidays." /> : (
+              <Table size="small">
+                <TableBody>
+                  {holidays.data?.map((h) => (
+                    <TableRow key={h.id} hover>
+                      <TableCell sx={{ pl: 2.5, whiteSpace: 'nowrap', fontWeight: 600 }}>{formatDate(h.holidayDate)}</TableCell>
+                      <TableCell>{h.name}<Typography variant="caption" color="text.secondary" component="div">{KIND_LABEL[h.kind] ?? h.kind}</Typography></TableCell>
+                      <TableCell><SoftChip label={h.isPaid ? 'Paid' : 'Unpaid'} tone={h.isPaid ? 'success' : 'default'} /></TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>
+                        {can('CALENDAR', 'delete') && (
+                          <Tooltip title="Remove holiday">
+                            <span><IconButton size="small" onClick={() => removeHoliday.mutate(h.id)} disabled={removeHoliday.isPending} aria-label={`Remove ${h.name}`}><DeleteOutlineOutlinedIcon fontSize="small" /></IconButton></span>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </CardContent></Card>
+          </SectionCard>
         </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ mb: 2 }}><CardContent>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">Weekly-off patterns</Typography>
-              {can('CALENDAR', 'create') && <Button size="small" startIcon={<AddIcon />} onClick={() => setPatternForm({ name: '', days: { 0: 'OFF' } })}>Add</Button>}
-            </Stack>
-            {patterns.isLoading ? <Loading minHeight={60} /> : (
-              <Table size="small"><TableBody>
-                {patterns.data?.map((p) => (
-                  <TableRow key={p.id}><TableCell>{p.name}</TableCell><TableCell>{describe(p)}</TableCell><TableCell align="right">{editable && <Button size="small" onClick={() => setPatternForm({ id: p.id, name: p.name, days: Object.fromEntries(p.rules.map((r) => [r.dow, r.weeks === 'ALL' ? 'OFF' : 'ALT'])) })}>Edit</Button>}</TableCell></TableRow>
-                ))}
-              </TableBody></Table>
-            )}
-          </CardContent></Card>
-          <Card><CardContent>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">Punch overrides</Typography>
-              {editable && <Button size="small" startIcon={<AddIcon />} onClick={() => setOverrideForm({ employeeIds: [], dates: todayIso(), reason: '' })}>Allow punching</Button>}
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Lets specific employees punch on a holiday or weekly off (e.g. maintenance staff).</Typography>
-            {(overrides.data?.length ?? 0) === 0 ? <Typography color="text.secondary" variant="body2">None upcoming.</Typography> : (
-              <Table size="small"><TableBody>
-                {overrides.data?.map((o) => (
-                  <TableRow key={o.id}><TableCell>{formatDate(o.date)}</TableCell><TableCell>{o.employee?.fullName}</TableCell><TableCell>{o.reason}</TableCell><TableCell align="right">{editable && <Button size="small" color="warning" onClick={() => revoke.mutate(o.id)}>Revoke</Button>}</TableCell></TableRow>
-                ))}
-              </TableBody></Table>
-            )}
-          </CardContent></Card>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <Stack spacing={2.5}>
+            <SectionCard title="Weekly-off patterns" icon={<EventRepeatOutlinedIcon />} flush action={can('CALENDAR', 'create') ? <Button size="small" startIcon={<AddIcon />} onClick={() => setPatternForm({ name: '', days: { 0: 'OFF' } })}>Add pattern</Button> : undefined}>
+              {patterns.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={80} /></Box> : (patterns.data?.length ?? 0) === 0 ? <EmptyState compact title="No weekly-off patterns" /> : (
+                <Table size="small">
+                  <TableBody>
+                    {patterns.data?.map((p) => (
+                      <TableRow key={p.id} hover>
+                        <TableCell sx={{ pl: 2.5, fontWeight: 600 }}>{p.name}</TableCell>
+                        <TableCell>{describe(p)}</TableCell>
+                        <TableCell align="right" sx={{ pr: 2.5 }}>{editable && <Button size="small" onClick={() => setPatternForm({ id: p.id, name: p.name, days: Object.fromEntries(p.rules.map((r) => [r.dow, r.weeks === 'ALL' ? 'OFF' : 'ALT'])) })}>Edit</Button>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </SectionCard>
+            <SectionCard
+              title="Punching on off days"
+              subtitle="Let specific employees punch on a holiday or weekly off (e.g. maintenance staff)."
+              icon={<HowToRegOutlinedIcon />}
+              flush
+              action={editable ? <Button size="small" startIcon={<AddIcon />} onClick={() => setOverrideForm({ employeeIds: [], dates: todayIso(), reason: '' })}>Allow punching</Button> : undefined}
+            >
+              {overrides.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={80} /></Box> : (overrides.data?.length ?? 0) === 0 ? <EmptyState compact title="None upcoming" /> : (
+                <Table size="small">
+                  <TableBody>
+                    {overrides.data?.map((o) => (
+                      <TableRow key={o.id} hover>
+                        <TableCell sx={{ pl: 2.5, whiteSpace: 'nowrap', fontWeight: 600 }}>{formatDate(o.date)}</TableCell>
+                        <TableCell>{o.employee?.fullName}</TableCell>
+                        <TableCell>{o.reason}</TableCell>
+                        <TableCell align="right" sx={{ pr: 2.5 }}>{editable && <Button size="small" color="warning" disabled={revoke.isPending} onClick={() => revoke.mutate(o.id)}>Revoke</Button>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </SectionCard>
+          </Stack>
         </Grid>
       </Grid>
 
       <FormDialog open={!!holidayForm} title="Add holiday" busy={addHoliday.isPending} onClose={() => setHolidayForm(null)} onSubmit={() => holidayForm && addHoliday.mutate(holidayForm)} maxWidth="xs">
         {holidayForm && (<>
           <TextField type="date" label="Date" value={holidayForm.holidayDate} onChange={(e) => setHolidayForm({ ...holidayForm, holidayDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-          <TextField label="Name" value={holidayForm.name} onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })} autoFocus />
-          <TextField select label="Type" value={holidayForm.kind} onChange={(e) => setHolidayForm({ ...holidayForm, kind: e.target.value })}><MenuItem value="NATIONAL">National</MenuItem><MenuItem value="FESTIVAL">Festival</MenuItem><MenuItem value="COMPANY">Company</MenuItem><MenuItem value="OPTIONAL">Optional</MenuItem></TextField>
+          <TextField label="Name" value={holidayForm.name} onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })} autoFocus placeholder="e.g. Diwali" />
+          <TextField select label="Type" value={holidayForm.kind} onChange={(e) => setHolidayForm({ ...holidayForm, kind: e.target.value })}>{Object.entries(KIND_LABEL).map(([k, v]) => <MenuItem key={k} value={k}>{v}</MenuItem>)}</TextField>
           <FormControlLabel control={<Checkbox checked={holidayForm.isPaid} onChange={(e) => setHolidayForm({ ...holidayForm, isPaid: e.target.checked })} />} label="Paid holiday" />
         </>)}
       </FormDialog>
-      <FormDialog open={!!calendarForm} title="New holiday calendar" busy={addCalendar.isPending} onClose={() => setCalendarForm(null)} onSubmit={() => calendarForm && addCalendar.mutate(calendarForm)} maxWidth="xs">
+      <FormDialog open={!!calendarForm} title="New holiday calendar" subtitle="Use separate calendars for branches in different states." busy={addCalendar.isPending} onClose={() => setCalendarForm(null)} onSubmit={() => calendarForm && addCalendar.mutate(calendarForm)} maxWidth="xs">
         {calendarForm && (<>
           <TextField label="Name" value={calendarForm.name} onChange={(e) => setCalendarForm({ ...calendarForm, name: e.target.value })} autoFocus helperText="e.g. Maharashtra, Karnataka — assign to branches" />
           <FormControlLabel control={<Checkbox checked={calendarForm.isDefault} onChange={(e) => setCalendarForm({ ...calendarForm, isDefault: e.target.checked })} />} label="Make this the company default" />
@@ -171,7 +206,7 @@ export default function CalendarPage() {
           ))}
         </>)}
       </FormDialog>
-      <FormDialog open={!!overrideForm} title="Allow punching on an off day" submitLabel="Grant" busy={grant.isPending} onClose={() => setOverrideForm(null)} onSubmit={() => overrideForm && grant.mutate(overrideForm)} maxWidth="xs">
+      <FormDialog open={!!overrideForm} title="Allow punching on an off day" submitLabel="Allow" busy={grant.isPending} onClose={() => setOverrideForm(null)} onSubmit={() => overrideForm && grant.mutate(overrideForm)} maxWidth="xs">
         {overrideForm && (<>
           <TextField select label="Employees" value={overrideForm.employeeIds} onChange={(e) => setOverrideForm({ ...overrideForm, employeeIds: (typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value) as string[] })} slotProps={{ select: { multiple: true } }}>
             {employees.data?.items.map((e) => <MenuItem key={e.id} value={e.id}>{e.fullName}</MenuItem>)}

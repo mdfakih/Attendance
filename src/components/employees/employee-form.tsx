@@ -1,11 +1,9 @@
 'use client';
 
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { employeeCreateSchema, SALARY_BASES, type EmployeeCreateInput } from '@attendance/contracts';
 import type { z } from 'zod';
-
-type FormValues = z.input<typeof employeeCreateSchema>;
 import Autocomplete from '@mui/material/Autocomplete';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -17,6 +15,16 @@ import { FormDialog } from '@/components/common/form-dialog';
 import { useBranches, useDepartments, useShifts, useSites } from '@/components/common/filters';
 import { todayIso } from '@/lib/format';
 import { useSession } from '@/lib/session';
+
+type FormValues = z.input<typeof employeeCreateSchema>;
+
+function Group({ children }: { children: string }) {
+  return (
+    <Grid size={12}>
+      <Typography variant="overline" color="text.secondary" component="div">{children}</Typography>
+    </Grid>
+  );
+}
 
 interface Props {
   readonly open: boolean;
@@ -35,17 +43,19 @@ export function EmployeeCreateDialog({ open, busy, onClose, onSubmit }: Props) {
     resolver: zodResolver(employeeCreateSchema),
     defaultValues: { fullName: '', phone: '', branchId: '', dateOfJoining: todayIso(), siteIds: [], geofenceMode: 'ASSIGNED_SITES' },
   });
-  const withSalary = form.watch('salary') !== undefined;
+  const withSalary = useWatch({ control: form.control, name: 'salary' }) !== undefined;
   const err = form.formState.errors;
   return (
-    <FormDialog open={open} title="Add employee" submitLabel="Create & get activation code" busy={busy} onClose={onClose} onSubmit={form.handleSubmit(onSubmit)} maxWidth="md">
+    <FormDialog open={open} title="Add employee" subtitle="After saving you get a one-time activation code. The employee enters it in the app with their mobile number." submitLabel="Create & get activation code" busy={busy} onClose={onClose} onSubmit={form.handleSubmit(onSubmit)} maxWidth="md">
       <Grid container spacing={2}>
+        <Group>Person</Group>
         <Grid size={{ xs: 12, sm: 6 }}><TextField label="Full name" {...form.register('fullName')} error={!!err.fullName} helperText={err.fullName?.message} autoFocus /></Grid>
         <Grid size={{ xs: 12, sm: 6 }}><TextField label="Mobile number" {...form.register('phone')} error={!!err.phone} helperText={err.phone?.message ?? 'Used to sign in to the app'} /></Grid>
         <Grid size={{ xs: 12, sm: 6 }}><TextField label="Employee code (optional)" {...form.register('employeeCode')} /></Grid>
         <Grid size={{ xs: 12, sm: 6 }}><TextField label="Email (optional)" type="email" {...form.register('email')} error={!!err.email} helperText={err.email?.message} /></Grid>
         <Grid size={{ xs: 12, sm: 6 }}><TextField label="Designation (optional)" {...form.register('designation')} /></Grid>
         <Grid size={{ xs: 12, sm: 6 }}><TextField type="date" label="Date of joining" {...form.register('dateOfJoining')} slotProps={{ inputLabel: { shrink: true } }} error={!!err.dateOfJoining} helperText={err.dateOfJoining?.message} /></Grid>
+        <Group>Where and when they work</Group>
         <Grid size={{ xs: 12, sm: 6 }}>
           <Controller name="branchId" control={form.control} render={({ field }) => (
             <TextField select label="Branch" {...field} error={!!err.branchId} helperText={err.branchId?.message} required>
@@ -83,7 +93,8 @@ export function EmployeeCreateDialog({ open, busy, onClose, onSubmit }: Props) {
         </Grid>
         {can('EMPLOYEE_SALARY', 'edit') && (
           <>
-            <Grid size={12}>
+            <Group>Pay</Group>
+            <Grid size={12} sx={{ mt: -1.5 }}>
               <FormControlLabel control={<Checkbox checked={withSalary} onChange={(e) => form.setValue('salary', e.target.checked ? { basis: 'MONTHLY', amount: '', effectiveFrom: form.getValues('dateOfJoining') } : undefined)} />} label={<Typography>Set salary now</Typography>} />
             </Grid>
             {withSalary && (

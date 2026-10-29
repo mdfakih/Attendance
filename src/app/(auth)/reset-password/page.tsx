@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import { AuthCard } from '@/components/auth/auth-card';
+import { PasswordField } from '@/components/auth/password-field';
+import { AppLoader } from '@/components/common/app-loader';
 import { authAction, errorMessage } from '@/lib/http';
 
 function ResetForm() {
@@ -32,8 +33,8 @@ function ResetForm() {
     <AuthCard title="Choose a new password">
       <Stack spacing={2}>
         {error && <Alert severity="error">{error}</Alert>}
-        <TextField label="New password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} helperText="At least 10 characters with letters and numbers" autoFocus />
-        <Button variant="contained" size="large" onClick={submit} disabled={busy || password.length < 10}>
+        <PasswordField label="New password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} helperText="At least 10 characters with letters and numbers" autoFocus />
+        <Button variant="contained" size="large" onClick={submit} disabled={password.length < 10} loading={busy}>
           Set password
         </Button>
       </Stack>
@@ -43,7 +44,7 @@ function ResetForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<AppLoader label="Loading" />}>
       <ResetForm />
     </Suspense>
   );

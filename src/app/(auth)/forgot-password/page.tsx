@@ -38,13 +38,13 @@ export default function ForgotPasswordPage() {
         ) : (
           <>
             <TextField label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-            <Button variant="contained" size="large" onClick={submit} disabled={busy || !email}>
+            <Button variant="contained" size="large" onClick={submit} disabled={!email} loading={busy}>
               Send reset link
             </Button>
           </>
         )}
         <Typography variant="body2" sx={{ textAlign: 'center' }}>
-          <Link href="/login">Back to sign in</Link>
+          <Typography component={Link} href="/login" variant="body2" color="primary" sx={{ fontWeight: 600 }}>Back to sign in</Typography>
         </Typography>
       </Stack>
     </AuthCard>

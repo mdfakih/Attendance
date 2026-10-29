@@ -26,6 +26,12 @@ const TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? 'https://tile.openstree
 const ATTRIBUTION = process.env.NEXT_PUBLIC_MAP_ATTRIBUTION ?? '&copy; OpenStreetMap contributors';
 const INDIA_CENTER: [number, number] = [20.5937, 78.9629];
 
+/** Reads a theme colour so circles and markers follow the brand and the light/dark palette. */
+function themeColor(name: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
 function FitBounds({ sites, points }: { sites: MapSite[]; points: MapPoint[] }) {
   const map = useMap();
   useEffect(() => {
@@ -57,23 +63,27 @@ function ClickCapture({ onClick }: { onClick: (lat: number, lng: number) => void
 
 /** Leaflet map with geofence circles and punch points. Must be loaded with `next/dynamic` (no SSR). */
 export default function PunchMap({ sites, points = [], height = 520, onClick }: PunchMapProps) {
+  const siteColor = themeColor('--mui-palette-primary-main', '#4F46E5');
+  const inColor = themeColor('--mui-palette-success-main', '#15803D');
+  const outColor = themeColor('--mui-palette-warning-main', '#B45309');
   return (
-    <div style={{ height }}>
+    <div style={{ height, minHeight: 280 }}>
       <MapContainer center={sites[0] ? [sites[0].lat, sites[0].lng] : INDIA_CENTER} zoom={sites[0] ? 15 : 5} scrollWheelZoom style={{ height: '100%' }}>
         <TileLayer url={TILE_URL} attribution={ATTRIBUTION} />
         <FitBounds sites={sites} points={points} />
         {onClick && <ClickCapture onClick={onClick} />}
         {sites.map((s) => (
-          <Circle key={s.id} center={[s.lat, s.lng]} radius={s.radiusM} pathOptions={{ color: '#1f5eff', fillOpacity: 0.08 }}>
+          <Circle key={s.id} center={[s.lat, s.lng]} radius={s.radiusM} pathOptions={{ color: siteColor, weight: 2, fillOpacity: 0.1 }}>
             <Tooltip permanent direction="top">{s.name}</Tooltip>
           </Circle>
         ))}
         {points.map((p) => (
-          <CircleMarker key={p.id} center={[p.lat, p.lng]} radius={6} pathOptions={{ color: p.direction === 'IN' ? '#0f9d8a' : '#e8590c', fillOpacity: 0.9 }}>
+          <CircleMarker key={p.id} center={[p.lat, p.lng]} radius={7} pathOptions={{ color: '#fff', weight: 2, fillColor: p.direction === 'IN' ? inColor : outColor, fillOpacity: 0.95 }}>
             <Popup>
               <strong>{p.name}</strong>
               <br />
-              {p.direction} · {p.at ? new Date(p.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
+              {p.direction === 'IN' ? 'Punched in' : 'Punched out'}
+              {p.at ? ` at ${new Date(p.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : ''}
             </Popup>
           </CircleMarker>
         ))}

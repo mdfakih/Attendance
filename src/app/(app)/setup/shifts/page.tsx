@@ -53,13 +53,15 @@ interface Policy {
   otRoundingMinutes: number;
   otDailyCapMinutes: number;
   otRequiresApproval: boolean;
+  outsideMinMinutes: number;
+  maxPunchesPerDay: number;
 }
 
 type ShiftForm = Omit<Shift, 'id' | 'code' | 'policyId'> & { id?: string; code: string; policyId: string };
 type PolicyForm = Omit<Policy, 'id'> & { id?: string };
 
 const emptyShift: ShiftForm = { name: '', code: '', startTime: '09:00', endTime: '18:00', dutyMinutes: 480, unpaidBreakMinutes: 60, isFlexible: false, windowBeforeStartMin: 120, windowAfterEndMin: 360, policyId: '', active: true };
-const emptyPolicy: PolicyForm = { name: '', hoursMode: 'FIRST_IN_LAST_OUT', lateGraceMin: 10, earlyLeaveGraceMin: 10, fullDayMinMinutes: null, halfDayMinMinutes: 240, missingOutTreatment: 'ABSENT', minPunchGapSec: 60, blockMockLocation: true, otMinMinutes: 30, otRoundingMinutes: 15, otDailyCapMinutes: 240, otRequiresApproval: true };
+const emptyPolicy: PolicyForm = { name: '', hoursMode: 'FIRST_IN_LAST_OUT', lateGraceMin: 10, earlyLeaveGraceMin: 10, fullDayMinMinutes: null, halfDayMinMinutes: 240, missingOutTreatment: 'ABSENT', minPunchGapSec: 60, blockMockLocation: true, otMinMinutes: 30, otRoundingMinutes: 15, otDailyCapMinutes: 240, otRequiresApproval: true, outsideMinMinutes: 15, maxPunchesPerDay: 6 };
 
 function Num({ label, value, onChange, help }: { label: string; value: number | null; onChange: (v: number | null) => void; help?: string }) {
   return <TextField type="number" label={label} value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} helperText={help} />;
@@ -186,7 +188,13 @@ export default function ShiftsPage() {
             </TextField>
             <Stack direction="row" spacing={1}>
               <Num label="Min gap between punches (sec)" value={policyForm.minPunchGapSec} onChange={(v) => setPolicyForm({ ...policyForm, minPunchGapSec: v ?? 0 })} />
+              <Num label="Max punches per day" value={policyForm.maxPunchesPerDay} onChange={(v) => setPolicyForm({ ...policyForm, maxPunchesPerDay: v ?? 0 })} help="2–20" />
               <TextField select label="Fake GPS apps" value={policyForm.blockMockLocation ? 'block' : 'flag'} onChange={(e) => setPolicyForm({ ...policyForm, blockMockLocation: e.target.value === 'block' })}><MenuItem value="block">Block punch</MenuItem><MenuItem value="flag">Allow but flag</MenuItem></TextField>
+            </Stack>
+            <Typography variant="overline" color="text.secondary">Time outside working hours</Typography>
+            <Stack direction="row" spacing={1}>
+              <TextField select label="Time outside working hours needs approval" value={policyForm.otRequiresApproval ? 'yes' : 'no'} onChange={(e) => setPolicyForm({ ...policyForm, otRequiresApproval: e.target.value === 'yes' })} helperText="Approved time first completes the day; the rest is overtime"><MenuItem value="yes">Yes, employee asks and a manager approves</MenuItem><MenuItem value="no">No, counted automatically</MenuItem></TextField>
+              <Num label="Ignore outside time shorter than (min)" value={policyForm.outsideMinMinutes} onChange={(v) => setPolicyForm({ ...policyForm, outsideMinMinutes: v ?? 0 })} help="Checked separately before the start and after the end" />
             </Stack>
             <Typography variant="overline" color="text.secondary">Overtime (when the Overtime feature is on)</Typography>
             <Stack direction="row" spacing={1}>
@@ -194,7 +202,6 @@ export default function ShiftsPage() {
               <Num label="Round down to (min)" value={policyForm.otRoundingMinutes} onChange={(v) => setPolicyForm({ ...policyForm, otRoundingMinutes: v ?? 1 })} />
               <Num label="Daily cap (min)" value={policyForm.otDailyCapMinutes} onChange={(v) => setPolicyForm({ ...policyForm, otDailyCapMinutes: v ?? 0 })} />
             </Stack>
-            <TextField select label="Overtime approval" value={policyForm.otRequiresApproval ? 'yes' : 'no'} onChange={(e) => setPolicyForm({ ...policyForm, otRequiresApproval: e.target.value === 'yes' })}><MenuItem value="yes">Manager must approve</MenuItem><MenuItem value="no">Auto-approved</MenuItem></TextField>
           </>
         )}
       </FormDialog>

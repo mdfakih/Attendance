@@ -22,7 +22,7 @@ import { Loading } from '@/components/common/loading';
 import { MonthPicker } from '@/components/common/month-picker';
 import { useSnackbar } from '@/components/common/snackbar';
 import { StatusChip } from '@/components/common/status-chip';
-import { formatDateTime, formatMinutes, formatTime, STATUS_COLOR, STATUS_LABEL, thisMonth } from '@/lib/format';
+import { formatDateTime, formatMinutes, formatOutside, formatTime, REG_STATE_LABEL, STATUS_COLOR, STATUS_LABEL, thisMonth } from '@/lib/format';
 import { api } from '@/lib/http';
 import { useSession } from '@/lib/session';
 
@@ -36,6 +36,8 @@ interface MonthDay {
   firstPunchAt: string | null;
   lastPunchAt: string | null;
   workedMinutes: number;
+  outsideMinutes: number;
+  regState: string;
   isLate: boolean;
   isMissingOut: boolean;
   flags: string[];
@@ -48,7 +50,7 @@ interface MonthView {
 }
 
 interface DayDetail {
-  day: { status: string; computedStatus: string; statusSource: string; workedMinutes: number; lateMinutes: number; isMissingOut: boolean; expectedStartAt: string | null; expectedEndAt: string | null; flags: string[]; periodLocked: boolean } | null;
+  day: { status: string; computedStatus: string; statusSource: string; workedMinutes: number; outsideEarlyMinutes: number; outsideLateMinutes: number; outsideMinutes: number; regState: string; regApprovedMinutes: number; lateMinutes: number; isMissingOut: boolean; expectedStartAt: string | null; expectedEndAt: string | null; flags: string[]; periodLocked: boolean } | null;
   punches: Array<{ id: string; serverTime: string; direction: string; site: { name: string } | null; distanceM: number | null; accuracyM: number | null; flags: string[]; selfieUrl: string | null; thumbUrl: string | null; voided: boolean }>;
   manualMarks: Array<{ id: string; action: string; status: string | null; reason: string; previousStatus: string | null; createdAt: string }>;
 }
@@ -114,6 +116,7 @@ export function EmployeeAttendanceTab({ employeeId }: { employeeId: string }) {
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>{i + 1}</Typography>
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', lineHeight: 1.2 }}>{d ? STATUS_LABEL[d.status] ?? d.status : ''}</Typography>
                     {d && d.workedMinutes > 0 && <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>{formatMinutes(d.workedMinutes)}{d.isLate ? ' · late' : ''}</Typography>}
+                    {d && d.outsideMinutes > 0 && <Typography variant="caption" title={formatOutside(d.outsideMinutes, d.regState)} sx={{ display: 'block', lineHeight: 1.2, color: 'warning.main' }}>+{formatMinutes(d.outsideMinutes)} · {REG_STATE_LABEL[d.regState] ?? d.regState}</Typography>}
                   </Box>
                 </Grid>
               );
@@ -132,6 +135,7 @@ export function EmployeeAttendanceTab({ employeeId }: { employeeId: string }) {
                 <StatusChip status={detail.data.day?.status ?? 'NOT_STARTED'} />
                 {detail.data.day?.statusSource === 'MANUAL' && <Chip size="small" label={`Manually set (was ${STATUS_LABEL[detail.data.day.computedStatus] ?? detail.data.day.computedStatus})`} color="info" variant="outlined" />}
                 {detail.data.day && <Typography variant="body2">{formatMinutes(detail.data.day.workedMinutes)} worked{detail.data.day.lateMinutes ? ` · ${detail.data.day.lateMinutes} min late` : ''}</Typography>}
+                {detail.data.day && detail.data.day.outsideMinutes > 0 && <Typography variant="body2" color="warning.main">{formatOutside(detail.data.day.outsideMinutes, detail.data.day.regState, detail.data.day.regApprovedMinutes)}</Typography>}
                 {detail.data.day?.periodLocked && <Chip size="small" label="Month locked" />}
               </Stack>
               {detail.data.punches.length === 0 ? <Typography color="text.secondary">No punches.</Typography> : detail.data.punches.map((p) => (

@@ -35,7 +35,7 @@ export const NAV: readonly NavSection[] = [
       { label: 'Daily', href: '/attendance/daily', icon: 'today', module: 'ATTENDANCE' },
       { label: 'Monthly register', href: '/attendance/register', icon: 'grid', module: 'ATTENDANCE' },
       { label: 'Leave requests', href: '/leave', icon: 'leave', module: 'LEAVE', feature: 'LEAVE' },
-      { label: 'Overtime', href: '/attendance/overtime', icon: 'timer', module: 'ATTENDANCE', feature: 'OVERTIME' },
+      { label: 'Extra time requests', href: '/attendance/extra-time', icon: 'timer', module: 'ATTENDANCE' },
     ],
   },
   {

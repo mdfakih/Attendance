@@ -14,7 +14,7 @@ import { DataTable } from '@/components/common/data-table';
 import { NamedSelect, useBranches, useDepartments, useSites } from '@/components/common/filters';
 import { PageHeader } from '@/components/common/page-header';
 import { StatusChip } from '@/components/common/status-chip';
-import { formatMinutes, formatTime, STATUS_LABEL, todayIso } from '@/lib/format';
+import { formatMinutes, formatOutside, formatTime, REG_STATE_COLOR, STATUS_LABEL, todayIso } from '@/lib/format';
 import { api } from '@/lib/http';
 
 interface DailyRow {
@@ -25,6 +25,8 @@ interface DailyRow {
   firstPunchAt: string | null;
   lastPunchAt: string | null;
   workedMinutes: number;
+  outsideMinutes: number;
+  regState: string;
   isLate: boolean;
   lateMinutes: number;
   isMissingOut: boolean;
@@ -58,7 +60,7 @@ function DailyPage() {
     { field: 'lastPunchAt', headerName: 'Last', width: 80, valueGetter: (_, r) => (r.punchCount > 1 ? formatTime(r.lastPunchAt) : '—') },
     { field: 'workedMinutes', headerName: 'Hours', width: 90, valueGetter: (_, r) => formatMinutes(r.workedMinutes) },
     { field: 'lateMinutes', headerName: 'Late', width: 80, valueGetter: (_, r) => (r.isLate ? `${r.lateMinutes} min` : '') },
-    { field: 'flags', headerName: 'Flags', flex: 1, minWidth: 160, renderCell: (p) => <Stack direction="row" spacing={0.5}>{p.row.statusSource === 'MANUAL' && <Chip size="small" label="manual" color="info" variant="outlined" />}{p.row.flags.filter((f) => f !== 'MANUAL' && f !== 'LATE').map((f) => <Chip key={f} size="small" label={f.replace(/_/g, ' ').toLowerCase()} variant="outlined" />)}</Stack> },
+    { field: 'flags', headerName: 'Flags', flex: 1, minWidth: 160, renderCell: (p) => <Stack direction="row" spacing={0.5}>{p.row.statusSource === 'MANUAL' && <Chip size="small" label="manual" color="info" variant="outlined" />}{p.row.outsideMinutes > 0 && <Chip size="small" label={formatOutside(p.row.outsideMinutes, p.row.regState)} color={REG_STATE_COLOR[p.row.regState] ?? 'default'} variant="outlined" />}{p.row.flags.filter((f) => f !== 'MANUAL' && f !== 'LATE').map((f) => <Chip key={f} size="small" label={f.replace(/_/g, ' ').toLowerCase()} variant="outlined" />)}</Stack> },
   ];
 
   return (

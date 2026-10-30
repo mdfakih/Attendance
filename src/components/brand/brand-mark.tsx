@@ -10,7 +10,10 @@ interface BrandMarkProps {
   readonly size?: number;
 }
 
-/** The product mark: a clock face with a check, filled with the active brand gradient. */
+/**
+ * The product mark: a "K" whose upper arm is a rising arrow (kamai, going up), filled with the active brand gradient.
+ * Same geometry as `src/app/icon.svg` and the mobile launcher icons.
+ */
 export function BrandMark({ size = 32 }: BrandMarkProps) {
   const id = useId().replace(/:/g, '');
   return (
@@ -22,10 +25,35 @@ export function BrandMark({ size = 32 }: BrandMarkProps) {
         </linearGradient>
       </defs>
       <rect width="48" height="48" rx="13" fill={`url(#g${id})`} />
-      <circle cx="24" cy="24" r="12.5" fill="none" stroke="#fff" strokeOpacity="0.4" strokeWidth="3" />
-      <path d="M24 11.5a12.5 12.5 0 0 1 12.5 12.5" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-      <path d="M18.5 24.5l4 4 7.5-8" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+      <g fill="none" stroke="#fff" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15.5 12.5v23" />
+        <path d="M15.5 29.5L32.5 12.5M24.5 12.5h8v8" />
+        <path d="M22.5 22.5l10 13" />
+      </g>
     </Box>
+  );
+}
+
+interface WordmarkProps {
+  readonly fontSize: number | string;
+  /** Colour of the "Go" part; the brand primary by default. Pass `inherit` on coloured backgrounds. */
+  readonly accentColor?: string;
+  readonly accentOpacity?: number;
+}
+
+/** The product name set as a wordmark: "Kamai" in the text colour, "Go" in the accent. */
+export function Wordmark({ fontSize, accentColor = 'primary.main', accentOpacity }: WordmarkProps) {
+  return (
+    <Typography
+      component="span"
+      sx={{ display: 'block', fontFamily: 'var(--font-display), inherit', fontWeight: 800, fontSize, lineHeight: 1.1, letterSpacing: '-0.02em' }}
+      noWrap
+    >
+      {PRODUCT.wordmark.base}
+      <Box component="span" sx={{ color: accentColor, opacity: accentOpacity }}>
+        {PRODUCT.wordmark.accent}
+      </Box>
+    </Typography>
   );
 }
 
@@ -40,9 +68,7 @@ export function BrandLogo({ size = 32, caption }: BrandLogoProps) {
     <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
       <BrandMark size={size} />
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontFamily: 'var(--font-display), inherit', fontWeight: 800, fontSize: size * 0.56, lineHeight: 1.1, letterSpacing: '-0.02em' }} noWrap>
-          {PRODUCT.name}
-        </Typography>
+        <Wordmark fontSize={size * 0.56} />
         {caption && (
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '0.65rem' }} noWrap>
             {caption}

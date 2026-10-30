@@ -1,8 +1,13 @@
+/** The wordmark sets the accent part in the brand colour: Kamai·Go. */
+const WORDMARK = { base: 'Kamai', accent: 'Go' } as const;
+const NAME = `${WORDMARK.base}${WORDMARK.accent}` as const;
+
 /** Product identity shared by the dashboard, the platform console and the employee app. */
 export const PRODUCT = {
-  name: 'Attendly',
+  name: NAME,
+  wordmark: WORDMARK,
   tagline: 'Attendance and pay, made simple',
-  consoleName: 'Attendly Console',
+  consoleName: `${NAME} Console`,
 } as const;
 
 /** "Acme Industries" → "AI"; falls back to the first letter. */

@@ -45,6 +45,12 @@ describe('initials', () => {
     expect(initials(name)).toBe(expected);
   });
 
+  it('names the product KamaiGo, matching its two-part wordmark', () => {
+    expect(PRODUCT.name).toBe('KamaiGo');
+    expect(`${PRODUCT.wordmark.base}${PRODUCT.wordmark.accent}`).toBe(PRODUCT.name);
+    expect(PRODUCT.consoleName).toBe('KamaiGo Console');
+  });
+
   it('builds document titles with the product name', () => {
     expect(pageTitle('Clients')).toBe(`Clients · ${PRODUCT.name}`);
     expect(pageTitle()).toBe(PRODUCT.name);

@@ -5,8 +5,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { keyframes } from '@mui/material/styles';
-import { BrandMark } from '@/components/brand/brand-mark';
-import { PRODUCT } from '@/lib/brand';
+import { BrandMark, Wordmark } from '@/components/brand/brand-mark';
 
 const pulse = keyframes`
   0% { transform: scale(0.92); opacity: 0.55; }
@@ -36,7 +35,7 @@ export function AppLoader({ label = 'Loading' }: AppLoaderProps) {
           </Box>
         </Box>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{PRODUCT.name}</Typography>
+          <Wordmark fontSize="1.25rem" />
           <Typography variant="body2" color="text.secondary">{label}…</Typography>
         </Box>
         <LinearProgress sx={{ width: 168, height: 4 }} aria-hidden />

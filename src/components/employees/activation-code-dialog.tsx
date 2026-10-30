@@ -14,6 +14,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Typography from '@mui/material/Typography';
 import { QRCodeSVG } from 'qrcode.react';
 import { EmptyState } from '@/components/common/loading';
+import { PRODUCT } from '@/lib/brand';
 import { formatDateTime } from '@/lib/format';
 
 export interface IssuedCode {
@@ -64,7 +65,7 @@ export function ActivationCodeDialog({ open, employeeName, phone, code, onClose 
             </Box>
             <Typography sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 800, fontSize: '2rem', letterSpacing: 4 }}>{code.formatted}</Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              Enter in the attendance app with your mobile number. Single use · valid until {formatDateTime(code.expiresAt)}
+              Enter in the {PRODUCT.name} app with your mobile number. Single use · valid until {formatDateTime(code.expiresAt)}
             </Typography>
           </Box>
         ) : (

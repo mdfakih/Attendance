@@ -10,7 +10,7 @@ import WhereToVoteOutlinedIcon from '@mui/icons-material/WhereToVoteOutlined';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { BrandLogo, BrandMark } from '@/components/brand/brand-mark';
+import { BrandLogo, BrandMark, Wordmark } from '@/components/brand/brand-mark';
 import { ThemeModeToggle } from '@/components/common/theme-mode-toggle';
 import { PRODUCT, pageTitle } from '@/lib/brand';
 
@@ -66,7 +66,7 @@ export function AuthCard({ title, subtitle, children, variant = 'employer' }: Au
           <Box sx={{ p: 0.5, borderRadius: 3.5, bgcolor: 'rgba(255,255,255,0.16)' }}>
             <BrandMark size={34} />
           </Box>
-          <Typography sx={{ fontFamily: 'var(--font-display), inherit', fontWeight: 800, fontSize: '1.3rem' }}>{PRODUCT.name}</Typography>
+          <Wordmark fontSize="1.3rem" accentColor="inherit" accentOpacity={0.72} />
           {variant === 'console' && (
             <Typography variant="caption" sx={{ px: 1, py: 0.25, borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.18)', fontWeight: 700, letterSpacing: '0.04em' }}>
               CONSOLE

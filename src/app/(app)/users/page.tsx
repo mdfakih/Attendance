@@ -4,10 +4,12 @@ import { useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
-import { MODULE_LABELS, PERMISSION_ACTIONS, PERMISSION_MODULES, type PermissionAction, type PermissionModule } from '@attendance/contracts';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Grid from '@mui/material/Grid';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
@@ -28,15 +30,18 @@ import { PageHeader } from '@/components/common/page-header';
 import { SectionCard } from '@/components/common/section-card';
 import { useSnackbar } from '@/components/common/snackbar';
 import { SoftChip } from '@/components/common/status-chip';
+import { PermissionMatrix } from '@/components/common/permission-matrix';
+import { moduleCount, type PermissionMatrixValue } from '@/lib/permission-matrix';
 import { formatDateTime } from '@/lib/format';
 import { api } from '@/lib/http';
+import { useSession } from '@/lib/session';
 
 interface Role {
   id: string;
   name: string;
   kind: 'ADMIN' | 'MANAGER';
   description: string | null;
-  permissions: Record<string, string[]>;
+  permissions: PermissionMatrixValue;
   members: number;
 }
 interface Member {
@@ -57,13 +62,15 @@ interface Invitation {
   expiresAt: string;
   expired: boolean;
 }
-type Matrix = Partial<Record<PermissionModule, PermissionAction[]>>;
+
+const ROLES_MANAGED_NOTE = 'Roles and their permissions are set up by your service provider. Contact them to add a role or change what it can do.';
 
 export default function UsersPage() {
+  const { session } = useSession();
   const { notify, notifyError } = useSnackbar();
   const queryClient = useQueryClient();
   const [invite, setInvite] = useState<{ email: string; fullName: string; roleId: string; branchIds: string[]; departmentIds: string[] } | null>(null);
-  const [roleForm, setRoleForm] = useState<{ id?: string; name: string; description: string; permissions: Matrix } | null>(null);
+  const [viewRole, setViewRole] = useState<Role | null>(null);
   const [edit, setEdit] = useState<Member | null>(null);
   const roles = useQuery({ queryKey: ['roles'], queryFn: () => api.get<Role[]>('/roles') });
   const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<{ members: Member[]; invitations: Invitation[] }>('/users') });
@@ -71,17 +78,10 @@ export default function UsersPage() {
   const departments = useDepartments();
   const inv = () => { queryClient.invalidateQueries({ queryKey: ['users'] }); queryClient.invalidateQueries({ queryKey: ['roles'] }); };
   const sendInvite = useMutation({ mutationFn: (f: NonNullable<typeof invite>) => api.post('/users/invite', f), onSuccess: () => { inv(); setInvite(null); notify('Invitation sent'); }, onError: notifyError });
-  const saveRole = useMutation({ mutationFn: (f: NonNullable<typeof roleForm>) => (f.id ? api.put(`/roles/${f.id}`, { name: f.name, description: f.description, permissions: f.permissions }) : api.post('/roles', { name: f.name, description: f.description, permissions: f.permissions })), onSuccess: () => { inv(); setRoleForm(null); notify('Role saved'); }, onError: notifyError });
   const updateMember = useMutation({ mutationFn: (m: Member) => api.patch(`/users/${m.membershipId}`, { roleId: m.role.id, status: m.status, branchIds: m.branchIds, departmentIds: m.departmentIds }), onSuccess: () => { inv(); setEdit(null); notify('User updated'); }, onError: notifyError });
   const resend = useMutation({ mutationFn: (id: string) => api.post(`/invitations/${id}/resend`), onSuccess: () => notify('Invitation re-sent'), onError: notifyError });
   const revoke = useMutation({ mutationFn: (id: string) => api.post(`/invitations/${id}/revoke`), onSuccess: () => { inv(); notify('Invitation revoked'); }, onError: notifyError });
 
-  const toggle = (m: PermissionModule, a: PermissionAction) => {
-    if (!roleForm) return;
-    const current = roleForm.permissions[m] ?? [];
-    const next = current.includes(a) ? current.filter((x) => x !== a) : [...current, a];
-    setRoleForm({ ...roleForm, permissions: { ...roleForm.permissions, [m]: next } });
-  };
   const multi = (v: unknown) => (typeof v === 'string' ? v.split(',') : (v as string[]));
   const scopeOf = (m: Member) => (m.branchIds.length + m.departmentIds.length === 0 ? 'Everyone' : [...m.branchIds.map((id) => branches.data?.find((b) => b.id === id)?.name), ...m.departmentIds.map((id) => departments.data?.find((d) => d.id === id)?.name)].filter(Boolean).join(', '));
   const members = users.data?.members ?? [];
@@ -91,7 +91,7 @@ export default function UsersPage() {
     <>
       <PageHeader
         title="Users & roles"
-        subtitle="Admins have full access. Managers see only the modules you tick for their role, optionally limited to some branches or departments."
+        subtitle="Admins have full access. Managers see only the modules their role allows, optionally limited to some branches or departments."
         actions={<Button variant="contained" startIcon={<AddIcon />} onClick={() => setInvite({ email: '', fullName: '', roleId: roles.data?.find((r) => r.kind === 'MANAGER')?.id ?? '', branchIds: [], departmentIds: [] })}>Invite user</Button>}
       />
       <Grid container spacing={2.5}>
@@ -134,7 +134,7 @@ export default function UsersPage() {
           </SectionCard>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <SectionCard title="Roles" icon={<AdminPanelSettingsOutlinedIcon />} flush action={<Button size="small" startIcon={<AddIcon />} onClick={() => setRoleForm({ name: '', description: '', permissions: {} })}>New role</Button>}>
+          <SectionCard title="Roles" subtitle={ROLES_MANAGED_NOTE} icon={<AdminPanelSettingsOutlinedIcon />} flush>
             {roles.isLoading ? <Box sx={{ p: 2.5 }}><Loading minHeight={120} /></Box> : (
               <Table size="small">
                 <TableBody>
@@ -142,9 +142,9 @@ export default function UsersPage() {
                     <TableRow key={r.id} hover>
                       <TableCell sx={{ pl: 2.5 }}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>{r.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">{r.kind === 'ADMIN' ? 'Full access' : `${Object.values(r.permissions).filter((a) => a.length).length} modules`} · {r.members} {r.members === 1 ? 'user' : 'users'}</Typography>
+                        <Typography variant="caption" color="text.secondary">{r.kind === 'ADMIN' ? 'Full access' : `${moduleCount(r.permissions)} modules`} · {r.members} {r.members === 1 ? 'user' : 'users'}</Typography>
                       </TableCell>
-                      <TableCell align="right" sx={{ pr: 2.5 }}>{r.kind === 'MANAGER' && <Button size="small" onClick={() => setRoleForm({ id: r.id, name: r.name, description: r.description ?? '', permissions: r.permissions as Matrix })}>Permissions</Button>}</TableCell>
+                      <TableCell align="right" sx={{ pr: 2.5 }}>{r.kind === 'MANAGER' && <Button size="small" onClick={() => setViewRole(r)}>View permissions</Button>}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -173,27 +173,18 @@ export default function UsersPage() {
         </>)}
       </FormDialog>
 
-      <FormDialog open={!!roleForm} title={roleForm?.id ? `Permissions: ${roleForm.name}` : 'New manager role'} subtitle="Tick what people with this role can do in each module." busy={saveRole.isPending} onClose={() => setRoleForm(null)} onSubmit={() => roleForm && saveRole.mutate(roleForm)} maxWidth="md">
-        {roleForm && (<>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <TextField label="Role name" value={roleForm.name} onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })} />
-            <TextField label="Description" value={roleForm.description} onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })} />
-          </Stack>
-          <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: 3 }}>
-            <Table size="small">
-              <TableHead><TableRow><TableCell>Module</TableCell>{PERMISSION_ACTIONS.map((a) => <TableCell key={a} align="center">{a}</TableCell>)}</TableRow></TableHead>
-              <TableBody>
-                {PERMISSION_MODULES.map((m) => (
-                  <TableRow key={m} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>{MODULE_LABELS[m]}</TableCell>
-                    {PERMISSION_ACTIONS.map((a) => <TableCell key={a} align="center" padding="checkbox"><Checkbox size="small" checked={roleForm.permissions[m]?.includes(a) ?? false} onChange={() => toggle(m, a)} slotProps={{ input: { 'aria-label': `${MODULE_LABELS[m]}: ${a}` } }} /></TableCell>)}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </>)}
-      </FormDialog>
+      <Dialog open={!!viewRole} onClose={() => setViewRole(null)} fullWidth maxWidth="md">
+        <DialogTitle>{viewRole?.name}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {viewRole?.description ? `${viewRole.description}. ` : ''}What people with this role can do. {ROLES_MANAGED_NOTE}
+          </Typography>
+          {viewRole && <PermissionMatrix value={viewRole.permissions} features={session.features} />}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewRole(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

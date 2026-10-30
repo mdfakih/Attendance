@@ -13,6 +13,8 @@ export interface ConsoleSession {
   readonly canBill: boolean;
   /** Create and retire plans. */
   readonly canEditPlans: boolean;
+  /** Create, edit and delete a client's roles and their permissions. */
+  readonly canManageRoles: boolean;
 }
 
 const Ctx = createContext<ConsoleSession | null>(null);
@@ -27,6 +29,7 @@ export function ConsoleSessionProvider({ me, children }: { me: PlatformMe; child
     canManage: me.role === 'SUPERADMIN' || me.role === 'SUPPORT',
     canBill: me.role === 'SUPERADMIN' || me.role === 'FINANCE',
     canEditPlans: me.role === 'SUPERADMIN',
+    canManageRoles: me.role === 'SUPERADMIN',
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

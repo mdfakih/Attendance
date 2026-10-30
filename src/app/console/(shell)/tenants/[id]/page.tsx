@@ -22,6 +22,7 @@ import { ClientBillingTab } from '@/components/console/client-billing-tab';
 import { ClientBrandingTab } from '@/components/console/client-branding-tab';
 import { ClientModulesTab } from '@/components/console/client-modules-tab';
 import { ClientOverviewTab } from '@/components/console/client-overview-tab';
+import { ClientRolesTab } from '@/components/console/client-roles-tab';
 import { useConsoleSession } from '@/components/console/console-session';
 import { TENANT_STATUS, type TenantDetail } from '@/components/console/types';
 import { consoleApi } from '@/lib/http';
@@ -29,6 +30,7 @@ import { consoleApi } from '@/lib/http';
 const TABS = [
   { value: 'overview', label: 'Overview' },
   { value: 'modules', label: 'Modules' },
+  { value: 'roles', label: 'Roles & permissions' },
   { value: 'branding', label: 'Branding' },
   { value: 'billing', label: 'Billing' },
 ] as const;
@@ -102,6 +104,7 @@ function TenantDetailView() {
       </Box>
       {tab === 'overview' && <ClientOverviewTab tenant={t} />}
       {tab === 'modules' && <ClientModulesTab tenantId={t.id} tenantName={t.displayName} />}
+      {tab === 'roles' && <ClientRolesTab tenantId={t.id} tenantName={t.displayName} />}
       {tab === 'branding' && <ClientBrandingTab key={t.id} tenantId={t.id} tenantName={t.displayName} branding={branding} />}
       {tab === 'billing' && <ClientBillingTab tenant={t} onChanged={refresh} />}
 

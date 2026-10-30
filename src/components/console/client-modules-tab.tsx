@@ -24,12 +24,12 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ErrorAlert, Loading } from '@/components/common/loading';
 import { SectionCard } from '@/components/common/section-card';
 import { useSnackbar } from '@/components/common/snackbar';
-import { consoleApi } from '@/lib/http';
 import { tint } from '@/lib/tone';
+import { clientFeaturesKey, saveClientFeature, useClientFeatures } from './client-features';
 import { useConsoleSession } from './console-session';
 
 const META: Readonly<Record<FeatureKey, { icon: ReactNode; where: ReadonlyArray<'Web' | 'App'> }>> = {
@@ -127,13 +127,12 @@ export function ClientModulesTab({ tenantId, tenantName }: ClientModulesTabProps
   const { canManage } = useConsoleSession();
   const { notify, notifyError } = useSnackbar();
   const queryClient = useQueryClient();
-  const key = ['console-tenant-features', tenantId];
-  const features = useQuery({ queryKey: key, queryFn: () => consoleApi.get<FeatureView[]>(`/tenants/${tenantId}/features`) });
+  const features = useClientFeatures(tenantId);
   const save = useMutation({
     // Sends only what changed, so locking never rewrites the stored on/off value.
-    mutationFn: (input: { key: FeatureKey; enabled?: boolean; locked?: boolean }) => consoleApi.put<FeatureView[]>(`/tenants/${tenantId}/features`, input),
+    mutationFn: (input: { key: FeatureKey; enabled?: boolean; locked?: boolean }) => saveClientFeature(tenantId, input),
     onSuccess: (data, input) => {
-      queryClient.setQueryData(key, data);
+      queryClient.setQueryData(clientFeaturesKey(tenantId), data);
       const label = FEATURE_REGISTRY[input.key].label;
       if (input.locked !== undefined) notify(`${label} ${input.locked ? 'locked' : 'unlocked'} for ${tenantName}`);
       else notify(`${label} turned ${input.enabled ? 'on' : 'off'} for ${tenantName}`);

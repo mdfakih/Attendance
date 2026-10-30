@@ -34,6 +34,10 @@ export interface Paged<T> {
   readonly meta: ApiMeta;
 }
 
+/** Nest's reply for a route the running API does not have, e.g. an API deployed before this web build. */
+const MISSING_ROUTE = /^Cannot (GET|POST|PUT|PATCH|DELETE) \//;
+const OUTDATED_API_MESSAGE = 'The server is running an older version that doesn’t support this yet. Deploy the latest API (and run its database migrations), then try again.';
+
 function create(baseURL: string, loginPath: string): AxiosInstance {
   const instance = axios.create({ baseURL, withCredentials: true, timeout: 60_000 });
   instance.interceptors.response.use(
@@ -44,6 +48,7 @@ function create(baseURL: string, loginPath: string): AxiosInstance {
       if (status === 401 && typeof window !== 'undefined' && !window.location.pathname.startsWith(loginPath)) {
         window.location.assign(`${loginPath}?next=${encodeURIComponent(window.location.pathname)}`);
       }
+      if (status === 404 && body?.error && MISSING_ROUTE.test(body.error.message)) throw new ApiError('API_OUTDATED', OUTDATED_API_MESSAGE, status);
       if (body?.error) throw new ApiError(body.error.code, body.error.message, status, body.error.details);
       throw new ApiError('NETWORK', status === 0 ? 'Cannot reach the server.' : `Request failed (${status}).`, status);
     },
@@ -97,6 +102,7 @@ export const consoleApi = {
   post: async <T>(url: string, data?: unknown): Promise<T> => unwrap<T>((await platformHttp.post<Envelope<T>>(url, data)).data),
   put: async <T>(url: string, data?: unknown): Promise<T> => unwrap<T>((await platformHttp.put<Envelope<T>>(url, data)).data),
   patch: async <T>(url: string, data?: unknown): Promise<T> => unwrap<T>((await platformHttp.patch<Envelope<T>>(url, data)).data),
+  delete: async <T>(url: string): Promise<T> => unwrap<T>((await platformHttp.delete<Envelope<T>>(url)).data),
 };
 
 /** Auth actions go through the BFF, which sets httpOnly cookies. */

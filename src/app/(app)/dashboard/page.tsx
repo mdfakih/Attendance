@@ -94,9 +94,10 @@ export default function DashboardPage() {
   const s = summary.data;
   const isToday = date === todayIso();
   const daily = (query: string) => `/attendance/daily?date=${date}&${query}`;
-  const showDevices = can('DEVICES');
+  // Same rules as the menu: the module (or option) must be on and the role must allow it.
+  const showDevices = has('DEVICE_APPROVAL') && can('DEVICES');
   const showLeave = has('LEAVE') && can('LEAVE');
-  const showExtra = has('EXTRA_TIME');
+  const showExtra = has('EXTRA_TIME') && can('ATTENDANCE');
   const attentionCount = Number(showDevices) + Number(showLeave) + Number(showExtra);
 
   const today: Tile[] = s

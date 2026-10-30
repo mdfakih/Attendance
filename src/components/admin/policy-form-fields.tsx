@@ -4,6 +4,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { DurationField } from '@/components/common/duration-field';
 
 export interface PolicyForm {
   id?: string;
@@ -48,8 +49,8 @@ export function PolicyFormFields({ value: p, onChange }: { value: PolicyForm; on
         <Num label="Early-leave grace (min)" value={p.earlyLeaveGraceMin} onChange={(v) => set({ earlyLeaveGraceMin: v ?? 0 })} />
       </Stack>
       <Stack direction="row" spacing={1}>
-        <Num label="Full day needs (min)" value={p.fullDayMinMinutes} onChange={(v) => set({ fullDayMinMinutes: v })} help="Blank = shift duty hours" />
-        <Num label="Half day needs (min)" value={p.halfDayMinMinutes} onChange={(v) => set({ halfDayMinMinutes: v ?? 0 })} />
+        <DurationField label="Full day needs" value={p.fullDayMinMinutes} onChange={(v) => set({ fullDayMinMinutes: v })} help="Blank = shift duty hours" />
+        <DurationField label="Half day needs" value={p.halfDayMinMinutes} onChange={(v) => set({ halfDayMinMinutes: v ?? 0 })} />
       </Stack>
       <TextField select label="Missing out-punch counts as" value={p.missingOutTreatment} onChange={(e) => set({ missingOutTreatment: e.target.value })}>
         <MenuItem value="ABSENT">Absent</MenuItem>
@@ -75,7 +76,7 @@ export function PolicyFormFields({ value: p, onChange }: { value: PolicyForm; on
       <Stack direction="row" spacing={1}>
         <Num label="Minimum (min)" value={p.otMinMinutes} onChange={(v) => set({ otMinMinutes: v ?? 0 })} />
         <Num label="Round down to (min)" value={p.otRoundingMinutes} onChange={(v) => set({ otRoundingMinutes: v ?? 1 })} />
-        <Num label="Daily cap (min)" value={p.otDailyCapMinutes} onChange={(v) => set({ otDailyCapMinutes: v ?? 0 })} />
+        <DurationField label="Daily cap" value={p.otDailyCapMinutes} onChange={(v) => set({ otDailyCapMinutes: v ?? 0 })} />
       </Stack>
     </>
   );

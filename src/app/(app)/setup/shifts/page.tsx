@@ -19,6 +19,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PolicyFormFields, type PolicyForm } from '@/components/admin/policy-form-fields';
+import { DurationField } from '@/components/common/duration-field';
 import { FormDialog } from '@/components/common/form-dialog';
 import { EmptyState, Loading } from '@/components/common/loading';
 import { PageHeader } from '@/components/common/page-header';
@@ -141,12 +142,12 @@ export default function ShiftsPage() {
               <TextField type="time" label="End" value={shiftForm.endTime} onChange={(e) => setShiftForm({ ...shiftForm, endTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} helperText={shiftForm.endTime <= shiftForm.startTime ? 'Ends next day (overnight)' : ''} />
             </Stack>
             <Stack direction="row" spacing={1}>
-              <Num label="Duty minutes" value={shiftForm.dutyMinutes} onChange={(v) => setShiftForm({ ...shiftForm, dutyMinutes: v ?? 0 })} help="480 = 8 hours" />
+              <DurationField label="Duty" value={shiftForm.dutyMinutes} onChange={(v) => setShiftForm({ ...shiftForm, dutyMinutes: v ?? 0 })} />
               <Num label="Unpaid break (min)" value={shiftForm.unpaidBreakMinutes} onChange={(v) => setShiftForm({ ...shiftForm, unpaidBreakMinutes: v ?? 0 })} />
             </Stack>
             <Stack direction="row" spacing={1}>
-              <Num label="Window before start (min)" value={shiftForm.windowBeforeStartMin} onChange={(v) => setShiftForm({ ...shiftForm, windowBeforeStartMin: v ?? 0 })} help="How early a punch still counts for this shift" />
-              <Num label="Window after end (min)" value={shiftForm.windowAfterEndMin} onChange={(v) => setShiftForm({ ...shiftForm, windowAfterEndMin: v ?? 0 })} />
+              <DurationField label="Window before start" value={shiftForm.windowBeforeStartMin} onChange={(v) => setShiftForm({ ...shiftForm, windowBeforeStartMin: v ?? 0 })} help="How early a punch still counts for this shift" />
+              <DurationField label="Window after end" value={shiftForm.windowAfterEndMin} onChange={(v) => setShiftForm({ ...shiftForm, windowAfterEndMin: v ?? 0 })} />
             </Stack>
             <TextField select label="Flexible timing" value={shiftForm.isFlexible ? 'yes' : 'no'} onChange={(e) => setShiftForm({ ...shiftForm, isFlexible: e.target.value === 'yes' })} helperText="Flexible shifts never mark late / early leave"><MenuItem value="no">No</MenuItem><MenuItem value="yes">Yes</MenuItem></TextField>
             <TextField select label="Policy" value={shiftForm.policyId} onChange={(e) => setShiftForm({ ...shiftForm, policyId: e.target.value })}><MenuItem value="">Company default</MenuItem>{policies.data?.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}</TextField>

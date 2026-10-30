@@ -13,6 +13,7 @@ import { PersonCell } from '@/components/admin/person-cell';
 import { REQUEST_FILTERS, REQUEST_STATUS } from '@/components/admin/status';
 import { StatusTabs } from '@/components/admin/status-tabs';
 import { DataTable } from '@/components/common/data-table';
+import { DurationField } from '@/components/common/duration-field';
 import { FeatureGate } from '@/components/common/feature-gate';
 import { FormDialog } from '@/components/common/form-dialog';
 import { PageHeader } from '@/components/common/page-header';
@@ -85,7 +86,7 @@ function ExtraTimeRequests() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [minutes, setMinutes] = useState('');
+  const [minutes, setMinutes] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const params = { status: status || undefined, page, pageSize };
   const list = useQuery({ queryKey: ['regularizations', params], queryFn: () => api.getPaged<RegRow>('/attendance/regularizations', params) });
@@ -99,10 +100,10 @@ function ExtraTimeRequests() {
     },
     onError: notifyError,
   });
-  const openDecision = (row: RegRow, decision: Pending['decision']) => { setPending({ row, decision }); setMinutes(String(outsideOf(row))); setNote(''); };
+  const openDecision = (row: RegRow, decision: Pending['decision']) => { setPending({ row, decision }); setMinutes(outsideOf(row)); setNote(''); };
   const max = pending ? outsideOf(pending.row) : 0;
-  const approved = Number(minutes);
-  const minutesError = pending?.decision === 'APPROVED' && !(Number.isInteger(approved) && approved >= 1 && approved <= max) ? `Enter 1 to ${max} minutes` : '';
+  const approved = minutes ?? 0;
+  const minutesError = pending?.decision === 'APPROVED' && !(approved >= 1 && approved <= max) ? `Enter 1 minute to ${formatMinutes(max)}` : '';
   const submit = () => {
     if (!pending || minutesError) return;
     const body: RegularizationDecisionInput = { decision: pending.decision, approvedMinutes: pending.decision === 'APPROVED' ? approved : undefined, note: note.trim() || undefined };
@@ -160,7 +161,7 @@ function ExtraTimeRequests() {
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}><strong>Reason:</strong> {pending.row.reason}</Typography>
             </Box>
             {pending.decision === 'APPROVED' && (
-              <TextField label="Minutes to count" type="number" value={minutes} onChange={(e) => setMinutes(e.target.value)} error={!!minutesError} helperText={minutesError || `${formatMinutes(approved)} of ${formatMinutes(max)}`} slotProps={{ htmlInput: { min: 1, max } }} autoFocus />
+              <DurationField label="Time to count" value={minutes} onChange={setMinutes} error={minutesError} help={`Up to ${formatMinutes(max)}`} autoFocus />
             )}
             <TextField label="Note to employee (optional)" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} slotProps={{ htmlInput: { maxLength: 300 } }} />
           </>
